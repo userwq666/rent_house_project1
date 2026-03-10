@@ -66,6 +66,15 @@ public class House {
     @Column(name = "view_count")
     private Integer viewCount = 0;
 
+    @Column(name = "assigned_staff_id")
+    private Long assignedStaffId;
+
+    @Column(name = "review_comment", columnDefinition = "TEXT")
+    private String reviewComment;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

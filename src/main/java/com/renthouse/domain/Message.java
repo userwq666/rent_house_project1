@@ -28,6 +28,18 @@ public class Message {
     @JoinColumn(name = "receiver_id")
     private User receiver;
 
+    @Column(name = "sender_operator_id")
+    private Long senderOperatorId;
+
+    @Column(name = "receiver_operator_id")
+    private Long receiverOperatorId;
+
+    @Column(name = "sender_operator_name", length = 80)
+    private String senderOperatorName;
+
+    @Column(name = "receiver_operator_name", length = 80)
+    private String receiverOperatorName;
+
     @Column(length = 200)
     private String title;
 

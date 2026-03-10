@@ -56,6 +56,21 @@ public class Contract {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "assigned_staff_id")
+    private Long assignedStaffId;
+
+    @Column(name = "signed_contract_url", length = 500)
+    private String signedContractUrl;
+
+    @Column(name = "signed_contract_name", length = 255)
+    private String signedContractName;
+
+    @Column(name = "signed_contract_uploaded_at")
+    private LocalDateTime signedContractUploadedAt;
+
+    @Column(name = "signed_contract_uploaded_by")
+    private Long signedContractUploadedBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

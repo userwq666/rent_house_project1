@@ -1,26 +1,28 @@
 package com.renthouse.service;
 
+import com.renthouse.domain.Contract;
 import com.renthouse.domain.House;
+import com.renthouse.domain.OperatorAccount;
 import com.renthouse.domain.User;
 import com.renthouse.dto.CreateHouseRequest;
 import com.renthouse.dto.HouseDTO;
-import com.renthouse.enums.AccountType;
+import com.renthouse.enums.ContractStatus;
 import com.renthouse.enums.HouseStatus;
-import com.renthouse.repository.AccountRepository;
+import com.renthouse.enums.MessageType;
+import com.renthouse.enums.OperatorRole;
 import com.renthouse.repository.ContractRepository;
 import com.renthouse.repository.HouseRepository;
+import com.renthouse.repository.OperatorAccountRepository;
 import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * 房源 Service（新版带权限校验）
- */
 @Service
 public class NewHouseService {
 
@@ -31,14 +33,17 @@ public class NewHouseService {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
+    private OperatorAccountService operatorAccountService;
+
+    @Autowired
+    private OperatorAccountRepository operatorAccountRepository;
 
     @Autowired
     private ContractRepository contractRepository;
 
-    /**
-     * 获取所有可租房源（公开）
-     */
+    @Autowired
+    private MessageService messageService;
+
     public List<HouseDTO> getAvailableHouses() {
         return houseRepository.findByStatus(HouseStatus.AVAILABLE)
                 .stream()
@@ -46,9 +51,6 @@ public class NewHouseService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 搜索房源（公开）
-     */
     public List<HouseDTO> searchHouses(String district, BigDecimal minPrice, BigDecimal maxPrice) {
         return houseRepository.searchHouses(HouseStatus.AVAILABLE, district, minPrice, maxPrice)
                 .stream()
@@ -56,9 +58,6 @@ public class NewHouseService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 根据ID获取房源详情（公开，浏览次数+1）
-     */
     @Transactional
     public HouseDTO getHouseById(Long id) {
         House house = houseRepository.findById(id)
@@ -70,9 +69,6 @@ public class NewHouseService {
         return convertToDTO(house);
     }
 
-    /**
-     * 获取用户发布的房源
-     */
     public List<HouseDTO> getMyHouses(Long userId) {
         return houseRepository.findByOwnerId(userId)
                 .stream()
@@ -80,9 +76,6 @@ public class NewHouseService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 管理员获取全部房源
-     */
     public List<HouseDTO> getAllHouses() {
         return houseRepository.findAll()
                 .stream()
@@ -90,9 +83,19 @@ public class NewHouseService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 发布房源
-     */
+    public List<HouseDTO> getStaffPendingHouses(Long operatorId) {
+        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+                .orElseThrow(() -> new RuntimeException("业务员不存在"));
+        if (operator.getRole() != OperatorRole.STAFF && operator.getRole() != OperatorRole.ADMIN) {
+            throw new RuntimeException("权限不足");
+        }
+        return houseRepository.findAll().stream()
+                .filter(h -> h.getStatus() == HouseStatus.PENDING_STAFF_REVIEW)
+                .filter(h -> operator.getRole() == OperatorRole.ADMIN || operatorId.equals(h.getAssignedStaffId()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public HouseDTO createHouse(CreateHouseRequest request, Long userId) {
         User user = userRepository.findById(userId)
@@ -102,10 +105,7 @@ public class NewHouseService {
             throw new RuntimeException("当前账号已被限制发布房源");
         }
 
-        // 管理员不能发布房源
-        if (user.getAccount() != null && user.getAccount().getAccountType() == AccountType.ADMIN) {
-            throw new RuntimeException("管理员不能发布房源");
-        }
+        OperatorAccount assignedStaff = operatorAccountService.pickRandomEnabledStaff();
 
         House house = new House();
         house.setOwner(user);
@@ -120,22 +120,83 @@ public class NewHouseService {
         house.setDescription(request.getDescription());
         house.setImages(request.getImages());
         house.setFacilities(request.getFacilities());
-        house.setStatus(HouseStatus.AVAILABLE);
+        house.setStatus(HouseStatus.PENDING_STAFF_REVIEW);
+        house.setAssignedStaffId(assignedStaff.getId());
         house.setViewCount(0);
 
         House saved = houseRepository.save(house);
+
+        messageService.notifyStaff(
+                assignedStaff.getId(),
+                "房源待审核",
+                String.format("房东 %s 发布了新房源《%s》，请审核", user.getRealName(), saved.getTitle()),
+                null,
+                null,
+                true,
+                MessageType.HOUSE_PENDING_STAFF_REVIEW
+        );
+
         return convertToDTO(saved);
     }
 
-    /**
-     * 更新房源（权限：房主或管理员）
-     */
     @Transactional
-    public HouseDTO updateHouse(Long houseId, CreateHouseRequest request, Long userId, Long accountId) {
+    public HouseDTO approveHouseByStaff(Long houseId, Long operatorId) {
+        House house = houseRepository.findById(houseId)
+                .orElseThrow(() -> new RuntimeException("房源不存在"));
+        checkStaffAssignment(house, operatorId);
+        if (house.getStatus() != HouseStatus.PENDING_STAFF_REVIEW) {
+            throw new RuntimeException("当前状态不支持审核");
+        }
+        house.setStatus(HouseStatus.AVAILABLE);
+        house.setReviewedAt(LocalDateTime.now());
+        house.setReviewComment("审核通过");
+        House saved = houseRepository.save(house);
+
+        messageService.sendMessage(
+                null,
+                house.getOwner().getId(),
+                "房源审核通过",
+                String.format("房源《%s》已通过业务员审核并上架", house.getTitle()),
+                MessageType.HOUSE_REVIEW_RESULT,
+                null,
+                null,
+                false
+        );
+        return convertToDTO(saved);
+    }
+
+    @Transactional
+    public HouseDTO rejectHouseByStaff(Long houseId, Long operatorId, String reason) {
+        House house = houseRepository.findById(houseId)
+                .orElseThrow(() -> new RuntimeException("房源不存在"));
+        checkStaffAssignment(house, operatorId);
+        if (house.getStatus() != HouseStatus.PENDING_STAFF_REVIEW) {
+            throw new RuntimeException("当前状态不支持审核");
+        }
+        house.setStatus(HouseStatus.OFFLINE);
+        house.setReviewedAt(LocalDateTime.now());
+        house.setReviewComment(reason == null || reason.isBlank() ? "审核未通过" : reason);
+        House saved = houseRepository.save(house);
+
+        messageService.sendMessage(
+                null,
+                house.getOwner().getId(),
+                "房源审核未通过",
+                String.format("房源《%s》审核未通过，原因：%s", house.getTitle(), house.getReviewComment()),
+                MessageType.HOUSE_REVIEW_RESULT,
+                null,
+                null,
+                false
+        );
+        return convertToDTO(saved);
+    }
+
+    @Transactional
+    public HouseDTO updateHouse(Long houseId, CreateHouseRequest request, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
 
-        checkHousePermission(house, userId, accountId);
+        checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
             throw new RuntimeException("该房源有待审批/进行中的合同，暂不支持编辑");
@@ -156,20 +217,30 @@ public class NewHouseService {
         house.setDescription(request.getDescription());
         house.setImages(request.getImages());
         house.setFacilities(request.getFacilities());
+        house.setStatus(HouseStatus.PENDING_STAFF_REVIEW);
+
+        OperatorAccount assignedStaff = operatorAccountService.pickRandomEnabledStaff();
+        house.setAssignedStaffId(assignedStaff.getId());
 
         House updated = houseRepository.save(house);
+        messageService.notifyStaff(
+                assignedStaff.getId(),
+                "房源待复审",
+                String.format("房源《%s》已更新，请复审", house.getTitle()),
+                null,
+                null,
+                true,
+                MessageType.HOUSE_PENDING_STAFF_REVIEW
+        );
         return convertToDTO(updated);
     }
 
-    /**
-     * 下架房源（权限：房主或管理员）
-     */
     @Transactional
-    public void offlineHouse(Long houseId, Long userId, Long accountId) {
+    public void offlineHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
 
-        checkHousePermission(house, userId, accountId);
+        checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
             throw new RuntimeException("该房源有待审批/进行中的合同，暂不可下架");
@@ -183,15 +254,12 @@ public class NewHouseService {
         houseRepository.save(house);
     }
 
-    /**
-     * 上架房源（权限：房主或管理员）
-     */
     @Transactional
-    public void onlineHouse(Long houseId, Long userId, Long accountId) {
+    public void onlineHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
 
-        checkHousePermission(house, userId, accountId);
+        checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
             throw new RuntimeException("该房源有待审批/进行中的合同，暂不可上架");
@@ -201,19 +269,20 @@ public class NewHouseService {
             throw new RuntimeException("房源已出租，无法上架");
         }
 
+        if (house.getStatus() == HouseStatus.PENDING_STAFF_REVIEW) {
+            throw new RuntimeException("房源审核中，无法直接上架");
+        }
+
         house.setStatus(HouseStatus.AVAILABLE);
         houseRepository.save(house);
     }
 
-    /**
-     * 删除房源（权限：房主或管理员）
-     */
     @Transactional
-    public void deleteHouse(Long houseId, Long userId, Long accountId) {
+    public void deleteHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
 
-        checkHousePermission(house, userId, accountId);
+        checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
             throw new RuntimeException("该房源有待审批/进行中的合同，暂不可删除");
@@ -226,26 +295,34 @@ public class NewHouseService {
         houseRepository.delete(house);
     }
 
-    /**
-     * 权限校验：是否为房主或管理员
-     */
-    private void checkHousePermission(House house, Long userId, Long accountId) {
-        if (house.getOwner().getId().equals(userId)) {
+    private void checkStaffAssignment(House house, Long operatorId) {
+        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+                .orElseThrow(() -> new RuntimeException("业务员不存在"));
+        if (operator.getRole() == OperatorRole.ADMIN) {
             return;
         }
-
-        AccountType accountType = accountRepository.findById(accountId)
-                .map(account -> account.getAccountType())
-                .orElseThrow(() -> new RuntimeException("账号不存在"));
-
-        if (accountType != AccountType.ADMIN) {
-            throw new RuntimeException("权限不足：只能操作自己的房源");
+        if (operator.getRole() != OperatorRole.STAFF) {
+            throw new RuntimeException("权限不足");
+        }
+        if (!operatorId.equals(house.getAssignedStaffId())) {
+            throw new RuntimeException("非当前分配业务员，无法审核");
         }
     }
 
-    /**
-     * 将 House 实体转为 DTO
-     */
+    private void checkHousePermission(House house, Long userId, Long operatorId) {
+        if (userId != null && house.getOwner().getId().equals(userId)) {
+            return;
+        }
+        if (operatorId != null) {
+            OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+                    .orElseThrow(() -> new RuntimeException("操作员不存在"));
+            if (operator.getRole() == OperatorRole.ADMIN) {
+                return;
+            }
+        }
+        throw new RuntimeException("权限不足：只能操作自己的房源");
+    }
+
     private HouseDTO convertToDTO(House house) {
         HouseDTO dto = new HouseDTO();
         dto.setId(house.getId());
@@ -266,6 +343,9 @@ public class NewHouseService {
         dto.setViewCount(house.getViewCount());
         dto.setCreatedAt(house.getCreatedAt());
         dto.setUpdatedAt(house.getUpdatedAt());
+        dto.setAssignedStaffId(house.getAssignedStaffId());
+        dto.setReviewComment(house.getReviewComment());
+        dto.setReviewedAt(house.getReviewedAt());
 
         contractRepository.findActiveContractByHouseId(house.getId())
                 .ifPresent(contract -> {
@@ -276,27 +356,14 @@ public class NewHouseService {
         return dto;
     }
 
-    /**
-     * 是否存在未完结（待审批/进行中/终止待确认）的合同锁定房源
-     */
-    private boolean isHouseLockedByContract(Long houseId) {
-        return contractRepository.existsByHouseIdAndStatusIn(houseId, java.util.List.of(
-                com.renthouse.enums.ContractStatus.PENDING_LANDLORD_APPROVAL,
-                com.renthouse.enums.ContractStatus.PENDING_ADMIN_APPROVAL,
-                com.renthouse.enums.ContractStatus.ACTIVE,
-                com.renthouse.enums.ContractStatus.TERMINATION_PENDING
-        ));
-    }
-
-    /**
-     * 检查房屋是否被合同锁定（包括待审批状态）
-     */
     public boolean isHouseLocked(Long houseId) {
-        return contractRepository.existsByHouseIdAndStatusIn(houseId, java.util.List.of(
-                com.renthouse.enums.ContractStatus.PENDING_LANDLORD_APPROVAL,
-                com.renthouse.enums.ContractStatus.PENDING_ADMIN_APPROVAL,
-                com.renthouse.enums.ContractStatus.ACTIVE,
-                com.renthouse.enums.ContractStatus.TERMINATION_PENDING
+        return contractRepository.existsByHouseIdAndStatusIn(houseId, List.of(
+                ContractStatus.PENDING_LANDLORD_APPROVAL,
+                ContractStatus.PENDING_STAFF_SIGNING,
+                ContractStatus.PENDING_ADMIN_APPROVAL,
+                ContractStatus.ACTIVE,
+                ContractStatus.TERMINATION_PENDING,
+                ContractStatus.TERMINATION_PENDING_STAFF_REVIEW
         ));
     }
 }

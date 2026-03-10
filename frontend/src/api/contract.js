@@ -84,6 +84,14 @@ export function approveContractByLandlord(id) {
   })
 }
 
+export function approveContractByLandlordWithStaff(id, staffId) {
+  return request({
+    url: `/api/contracts/${id}/landlord/approve`,
+    method: 'put',
+    data: { staffId }
+  })
+}
+
 export function approveContractByAdmin(id) {
   return request({
     url: `/api/contracts/${id}/admin/approve`,
@@ -109,5 +117,25 @@ export function getAllContracts() {
   return request({
     url: '/api/contracts/all',
     method: 'get'
+  })
+}
+
+export function getMyStaffContracts() {
+  return request({
+    url: '/api/contracts/staff/my',
+    method: 'get'
+  })
+}
+
+export function uploadSignedContract(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `/api/contracts/${id}/signed-file`,
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }

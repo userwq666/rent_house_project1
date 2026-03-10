@@ -156,6 +156,53 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <el-tab-pane label="业务员" name="staff">
+          <el-form :inline="true" class="staff-form">
+            <el-form-item label="用户名">
+              <el-input v-model="staffForm.username" placeholder="staff001" />
+            </el-form-item>
+            <el-form-item label="密码">
+              <el-input v-model="staffForm.password" placeholder="至少6位" show-password />
+            </el-form-item>
+            <el-form-item label="姓名">
+              <el-input v-model="staffForm.displayName" placeholder="业务员姓名" />
+            </el-form-item>
+            <el-form-item label="手机号">
+              <el-input v-model="staffForm.phone" placeholder="手机号" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="submitCreateStaff">新增业务员</el-button>
+            </el-form-item>
+          </el-form>
+
+          <el-table :data="staffList" v-loading="loading" style="width: 100%">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="username" label="用户名" width="160" />
+            <el-table-column prop="displayName" label="姓名" width="160" />
+            <el-table-column prop="phone" label="手机号" width="160" />
+            <el-table-column prop="role" label="角色" width="120">
+              <template #default>
+                <el-tag type="warning">业务员</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="160">
+              <template #default="{ row }">
+                <el-switch
+                  v-model="row.enabled"
+                  active-text="启用"
+                  inactive-text="停用"
+                  @change="value => handleStaffStatusChange(row, value)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column prop="createdAt" label="创建时间" width="180">
+              <template #default="{ row }">
+                {{ formatDateTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -167,7 +214,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAllHousesAdmin, deleteHouse } from '../api/house'
 import { getAllContracts, adminTerminateContract, approveContractByAdmin } from '../api/contract'
-import { fetchAllUsers, updateUserRestrictions, updateUserStatus } from '../api/admin'
+import { fetchAllUsers, updateUserRestrictions, updateUserStatus, fetchStaffList, createStaff, updateStaffStatus } from '../api/admin'
 
 const router = useRouter()
 const loading = ref(false)
@@ -175,6 +222,13 @@ const activeTab = ref('houses')
 const houses = ref([])
 const contracts = ref([])
 const users = ref([])
+const staffList = ref([])
+const staffForm = reactive({
+  username: '',
+  password: '',
+  displayName: '',
+  phone: ''
+})
 
 // 定时刷新合同状态（每 5 秒）
 let contractRefreshInterval = null
@@ -231,6 +285,18 @@ const fetchUsers = async () => {
   }
 }
 
+const fetchStaffs = async () => {
+  try {
+    loading.value = true
+    const { data } = await fetchStaffList()
+    staffList.value = data || []
+  } catch (error) {
+    ElMessage.error(error.response?.data || '获取业务员列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const updateStats = () => {
   stats.totalHouses = houses.value.length
   stats.availableHouses = houses.value.filter(h => h.status === 'AVAILABLE').length
@@ -245,6 +311,8 @@ const handleTabClick = () => {
     fetchContracts()
   } else if (activeTab.value === 'users') {
     fetchUsers()
+  } else if (activeTab.value === 'staff') {
+    fetchStaffs()
   }
 }
 
@@ -367,6 +435,34 @@ const handleStatusChange = async (row, value) => {
   }
 }
 
+const submitCreateStaff = async () => {
+  if (!staffForm.username || !staffForm.password) {
+    ElMessage.warning('请填写用户名和密码')
+    return
+  }
+  try {
+    await createStaff({ ...staffForm })
+    ElMessage.success('业务员创建成功')
+    staffForm.username = ''
+    staffForm.password = ''
+    staffForm.displayName = ''
+    staffForm.phone = ''
+    fetchStaffs()
+  } catch (error) {
+    ElMessage.error(error.response?.data || '创建失败')
+  }
+}
+
+const handleStaffStatusChange = async (row, value) => {
+  try {
+    await updateStaffStatus(row.id, { enabled: row.enabled })
+    ElMessage.success(row.enabled ? '业务员已启用' : '业务员已停用')
+  } catch (error) {
+    ElMessage.error(error.response?.data || '更新业务员状态失败')
+    row.enabled = !value
+  }
+}
+
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   return dateStr.split('T')[0]
@@ -378,12 +474,12 @@ const formatDateTime = (dateStr) => {
 }
 
 const getHouseStatusType = (status) => {
-  const map = { AVAILABLE: 'success', PENDING: 'warning', RENTED: 'info', OFFLINE: 'warning' }
+  const map = { AVAILABLE: 'success', PENDING: 'warning', PENDING_STAFF_REVIEW: 'warning', RENTED: 'info', OFFLINE: 'warning' }
   return map[status] || ''
 }
 
 const getHouseStatusText = (status) => {
-  const map = { AVAILABLE: '可租', PENDING: '等待中', RENTED: '已租', OFFLINE: '下架' }
+  const map = { AVAILABLE: '可租', PENDING: '等待中', PENDING_STAFF_REVIEW: '待业务员审核', RENTED: '已租', OFFLINE: '下架' }
   return map[status] || status
 }
 
@@ -393,7 +489,9 @@ const getContractStatusType = (status) => {
     EXPIRED: 'info',
     TERMINATED: 'danger',
     TERMINATION_PENDING: 'warning',
+    TERMINATION_PENDING_STAFF_REVIEW: 'warning',
     PENDING_LANDLORD_APPROVAL: 'warning',
+    PENDING_STAFF_SIGNING: 'warning',
     PENDING_ADMIN_APPROVAL: 'warning'
   }
   return map[status] || ''
@@ -405,7 +503,9 @@ const getContractStatusText = (status) => {
     EXPIRED: '已到期',
     TERMINATED: '已终止',
     TERMINATION_PENDING: '待终止确认',
+    TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
     PENDING_LANDLORD_APPROVAL: '待房主审批',
+    PENDING_STAFF_SIGNING: '待业务员签约',
     PENDING_ADMIN_APPROVAL: '待管理员审批'
   }
   return map[status] || status
@@ -415,6 +515,7 @@ onMounted(() => {
   fetchHouses()
   fetchContracts()
   fetchUsers()
+  fetchStaffs()
   startContractRefresh() // 启动定时刷新
 })
 
@@ -548,6 +649,10 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text);
   font-family: var(--font-main);
+}
+
+.staff-form {
+  margin-bottom: 16px;
 }
 
 /* 响应式优化 */

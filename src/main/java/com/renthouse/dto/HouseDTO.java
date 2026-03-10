@@ -32,4 +32,7 @@ public class HouseDTO {
     private Long currentTenantId;
     private String currentTenantName;
     private String currentTenantPhone;
+    private Long assignedStaffId;
+    private String reviewComment;
+    private LocalDateTime reviewedAt;
 }

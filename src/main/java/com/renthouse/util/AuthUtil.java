@@ -1,48 +1,52 @@
 package com.renthouse.util;
 
+import com.renthouse.enums.OperatorRole;
 import com.renthouse.security.AuthenticatedUser;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/**
- * 认证工具类
- */
 public class AuthUtil {
 
-    /**
-     * 从 SecurityContext 获取当前用户ID
-     */
+    private static AuthenticatedUser getPrincipal() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() && authentication.getPrincipal() instanceof AuthenticatedUser principal) {
+            return principal;
+        }
+        throw new RuntimeException("未登录或登录已过期");
+    }
+
     public static Long getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof AuthenticatedUser) {
-                return ((AuthenticatedUser) principal).getUserId();
-            }
-            if (principal instanceof Long) {
-                return (Long) principal;
-            }
+        AuthenticatedUser principal = getPrincipal();
+        if (principal.getUserId() == null) {
+            throw new RuntimeException("当前账号不是普通用户");
         }
-        throw new RuntimeException("未登录或登录已过期");
+        return principal.getUserId();
     }
 
-    /**
-     * 从 SecurityContext 获取当前账号ID
-     */
     public static Long getCurrentAccountId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof AuthenticatedUser) {
-                return ((AuthenticatedUser) principal).getAccountId();
-            }
+        AuthenticatedUser principal = getPrincipal();
+        if (principal.getAccountId() == null) {
+            throw new RuntimeException("当前账号不是普通用户");
         }
-        throw new RuntimeException("未登录或登录已过期");
+        return principal.getAccountId();
     }
 
-    /**
-     * 检查是否已登录
-     */
+    public static Long getCurrentOperatorId() {
+        AuthenticatedUser principal = getPrincipal();
+        if (principal.getOperatorId() == null) {
+            throw new RuntimeException("当前账号不是管理员/业务员");
+        }
+        return principal.getOperatorId();
+    }
+
+    public static OperatorRole getCurrentOperatorRole() {
+        AuthenticatedUser principal = getPrincipal();
+        if (principal.getOperatorRole() == null) {
+            throw new RuntimeException("当前账号不是管理员/业务员");
+        }
+        return principal.getOperatorRole();
+    }
+
     public static boolean isAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.isAuthenticated();

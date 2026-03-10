@@ -22,3 +22,26 @@ export function updateUserStatus(userId, data) {
     data
   })
 }
+
+export function fetchStaffList() {
+  return request({
+    url: '/api/admin/operators/staff',
+    method: 'get'
+  })
+}
+
+export function createStaff(data) {
+  return request({
+    url: '/api/admin/operators/staff',
+    method: 'post',
+    data
+  })
+}
+
+export function updateStaffStatus(id, data) {
+  return request({
+    url: `/api/admin/operators/${id}/status`,
+    method: 'put',
+    data
+  })
+}

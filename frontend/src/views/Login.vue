@@ -87,8 +87,10 @@ const handleLogin = async () => {
     if (data.token) {
       sessionStorage.setItem('token', data.token)
       sessionStorage.setItem('userId', data.userId)
+      sessionStorage.setItem('operatorId', data.operatorId || '')
       sessionStorage.setItem('username', data.username)
       sessionStorage.setItem('userType', data.userType)
+      sessionStorage.setItem('principalType', data.principalType || 'USER')
       
       ElMessage.success(data.message || '登录成功')
       
@@ -97,6 +99,8 @@ const handleLogin = async () => {
       if (data.userType === 'ADMIN') {
         console.log('管理员登录，跳转至后台')
         router.push('/admin')
+      } else if (data.userType === 'STAFF') {
+        router.push('/my-contracts')
       } else {
         const redirectPath = route.query.redirect || '/home'
         console.log('普通用户登录，跳转至:', redirectPath)

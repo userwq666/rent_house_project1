@@ -33,4 +33,8 @@ public class ContractDTO {
     private LocalDateTime createdAt;
     private TerminationStatus terminationStatus;
     private Long terminationRequestId;
+    private Long assignedStaffId;
+    private String signedContractUrl;
+    private String signedContractName;
+    private LocalDateTime signedContractUploadedAt;
 }

@@ -136,3 +136,43 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_msg_related_contract (related_contract_id),
     INDEX idx_msg_related_request (related_request_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统消息';
+
+-- 7. 管理员/业务员账号（独立于 users）
+CREATE TABLE IF NOT EXISTS operator_accounts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL COMMENT 'ADMIN/STAFF',
+    display_name VARCHAR(80),
+    phone VARCHAR(20),
+    enabled TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_operator_role (role),
+    INDEX idx_operator_enabled (enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后台操作员账号';
+
+-- 8. 房源新增字段（业务员审核）
+ALTER TABLE houses
+    ADD COLUMN IF NOT EXISTS assigned_staff_id BIGINT NULL,
+    ADD COLUMN IF NOT EXISTS review_comment TEXT NULL,
+    ADD COLUMN IF NOT EXISTS reviewed_at DATETIME NULL;
+
+-- 9. 合同新增字段（业务员签约上传）
+ALTER TABLE contracts
+    ADD COLUMN IF NOT EXISTS assigned_staff_id BIGINT NULL,
+    ADD COLUMN IF NOT EXISTS signed_contract_url VARCHAR(500) NULL,
+    ADD COLUMN IF NOT EXISTS signed_contract_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS signed_contract_uploaded_at DATETIME NULL,
+    ADD COLUMN IF NOT EXISTS signed_contract_uploaded_by BIGINT NULL;
+
+-- 10. 终止申请新增业务员审核字段
+ALTER TABLE termination_requests
+    ADD COLUMN IF NOT EXISTS review_staff_id BIGINT NULL;
+
+-- 11. 消息新增操作员收发字段
+ALTER TABLE messages
+    ADD COLUMN IF NOT EXISTS sender_operator_id BIGINT NULL,
+    ADD COLUMN IF NOT EXISTS receiver_operator_id BIGINT NULL,
+    ADD COLUMN IF NOT EXISTS sender_operator_name VARCHAR(80) NULL,
+    ADD COLUMN IF NOT EXISTS receiver_operator_name VARCHAR(80) NULL;

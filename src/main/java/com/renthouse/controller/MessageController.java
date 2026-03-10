@@ -1,6 +1,5 @@
 package com.renthouse.controller;
 
-import com.renthouse.dto.MessageDTO;
 import com.renthouse.dto.SendMessageRequest;
 import com.renthouse.enums.MessageStatus;
 import com.renthouse.enums.MessageType;
@@ -10,7 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -26,9 +24,13 @@ public class MessageController {
     @GetMapping
     public ResponseEntity<?> getMyMessages() {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            List<MessageDTO> messages = messageService.getMessages(userId);
-            return ResponseEntity.ok(messages);
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                return ResponseEntity.ok(messageService.getMessages(userId));
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                return ResponseEntity.ok(messageService.getOperatorMessages(operatorId));
+            }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -37,9 +39,13 @@ public class MessageController {
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadMessageCount() {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            long count = messageService.getUnreadMessageCount(userId);
-            return ResponseEntity.ok(count);
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                return ResponseEntity.ok(messageService.getUnreadMessageCount(userId));
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                return ResponseEntity.ok(messageService.getOperatorUnreadMessageCount(operatorId));
+            }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -49,8 +55,7 @@ public class MessageController {
     public ResponseEntity<?> getMessageContacts() {
         try {
             Long userId = AuthUtil.getCurrentUserId();
-            List<MessageDTO> contacts = messageService.getMessageContacts(userId);
-            return ResponseEntity.ok(contacts);
+            return ResponseEntity.ok(messageService.getMessageContacts(userId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -60,8 +65,7 @@ public class MessageController {
     public ResponseEntity<?> getChatMessages(@PathVariable Long contactId) {
         try {
             Long userId = AuthUtil.getCurrentUserId();
-            List<MessageDTO> messages = messageService.getChatMessages(userId, contactId);
-            return ResponseEntity.ok(messages);
+            return ResponseEntity.ok(messageService.getChatMessages(userId, contactId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -70,8 +74,13 @@ public class MessageController {
     @PostMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@PathVariable Long id) {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            messageService.markAsRead(id, userId);
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                messageService.markAsRead(id, userId);
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                messageService.markAsRead(id, operatorId);
+            }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -81,10 +90,15 @@ public class MessageController {
     @PostMapping("/{id}/status")
     public ResponseEntity<?> updateMessageStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
             String statusStr = payload.get("status");
             MessageStatus status = MessageStatus.valueOf(statusStr);
-            messageService.updateMessageStatus(id, userId, status);
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                messageService.updateMessageStatus(id, userId, status);
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                messageService.updateMessageStatus(id, operatorId, status);
+            }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -110,11 +124,10 @@ public class MessageController {
                 return ResponseEntity.badRequest().body("不能向系统发送消息");
             }
             if (request.getReceiverId() == null) {
-                messageService.notifyAdmins(request.getTitle(), request.getContent(), null, null, false);
-            } else {
-                messageService.sendMessage(userId, request.getReceiverId(), request.getTitle(), request.getContent(),
-                        MessageType.USER_CHAT, null, null, false);
+                return ResponseEntity.badRequest().body("接收方不能为空");
             }
+            messageService.sendMessage(userId, request.getReceiverId(), request.getTitle(), request.getContent(),
+                    MessageType.USER_CHAT, null, null, false);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -124,27 +137,20 @@ public class MessageController {
     @GetMapping("/admin")
     public ResponseEntity<?> getAdminMessages() {
         try {
-            Long accountId = AuthUtil.getCurrentAccountId();
-            return ResponseEntity.ok(messageService.getAdminMessages(accountId));
+            Long operatorId = AuthUtil.getCurrentOperatorId();
+            return ResponseEntity.ok(messageService.getAdminMessages(operatorId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    /**
-     * 归档与特定联系人的所有消息（前端隐藏，数据库保留）
-     */
     @PostMapping("/archive/{contactId}")
     public ResponseEntity<?> archiveContactMessages(@PathVariable Long contactId) {
         try {
             Long userId = AuthUtil.getCurrentUserId();
-            System.out.println("归档消息：userId=" + userId + ", contactId=" + contactId);
             messageService.archiveContactMessages(userId, contactId);
-            System.out.println("归档成功");
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            System.err.println("归档失败：" + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }

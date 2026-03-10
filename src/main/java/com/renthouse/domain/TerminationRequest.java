@@ -29,8 +29,11 @@ public class TerminationRequest {
     private User requester;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "responder_id", nullable = false)
+    @JoinColumn(name = "responder_id")
     private User responder;
+
+    @Column(name = "review_staff_id")
+    private Long reviewStaffId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

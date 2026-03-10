@@ -10,9 +10,9 @@
 
     <div class="card glass">
       <el-tabs v-model="activeTab" @tab-click="fetchContracts">
-        <el-tab-pane label="全部合同" name="all" />
-        <el-tab-pane label="作为房主" name="landlord" />
-        <el-tab-pane label="作为租客" name="tenant" />
+        <el-tab-pane :label="isStaff ? '分配给我的合同' : '全部合同'" name="all" />
+        <el-tab-pane v-if="!isStaff" label="作为房主" name="landlord" />
+        <el-tab-pane v-if="!isStaff" label="作为租客" name="tenant" />
       </el-tabs>
 
       <el-table :data="currentContracts" v-loading="loading" style="width: 100%">
@@ -24,8 +24,8 @@
         <el-table-column prop="houseAddress" label="地址" min-width="220" show-overflow-tooltip />
         <el-table-column label="我的身份" width="100">
           <template #default="{ row }">
-            <el-tag :type="getUserRole(row) === '房主' ? 'success' : 'primary'">
-              {{ getUserRole(row) }}
+            <el-tag :type="getUserRoleLabel(row) === '房主' ? 'success' : 'primary'">
+              {{ getUserRoleLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -63,7 +63,7 @@
           <template #default="{ row }">
             <div class="action-cell">
               <el-button
-                v-if="row.status === 'PENDING_LANDLORD_APPROVAL'"
+                v-if="!isStaff && row.status === 'PENDING_LANDLORD_APPROVAL'"
                 size="small"
                 type="primary"
                 class="full-btn"
@@ -72,7 +72,16 @@
                 同意合同
               </el-button>
               <el-button
-                v-else-if="row.status === 'ACTIVE'"
+                v-else-if="isStaff && row.status === 'PENDING_STAFF_SIGNING'"
+                size="small"
+                type="primary"
+                class="full-btn"
+                @click="handleUploadSignedFile(row)"
+              >
+                上传签约合同
+              </el-button>
+              <el-button
+                v-else-if="!isStaff && row.status === 'ACTIVE'"
                 size="small"
                 type="danger"
                 class="full-btn"
@@ -80,9 +89,9 @@
               >
                 终止
               </el-button>
-              <el-tag v-else-if="row.status === 'TERMINATION_PENDING'" type="warning">审核中</el-tag>
+              <el-tag v-else-if="row.status === 'TERMINATION_PENDING' || row.status === 'TERMINATION_PENDING_STAFF_REVIEW'" type="warning">审核中</el-tag>
               <div class="link-row">
-                <el-button size="small" text type="primary" class="link-btn" @click="quickChat('user', row)">
+                <el-button v-if="!isStaff" size="small" text type="primary" class="link-btn" @click="quickChat('user', row)">
                   联系对方
                 </el-button>
                 <el-button size="small" text class="link-btn" @click="quickChat('house', row)">
@@ -125,6 +134,8 @@ import {
   getMyContracts,
   getLandlordContracts,
   getTenantContracts,
+  getMyStaffContracts,
+  uploadSignedContract,
   terminateContract,
   approveContractByLandlord
 } from '../api/contract'
@@ -137,6 +148,7 @@ const landlordContracts = ref([])
 const tenantContracts = ref([])
 const currentUserId = Number(sessionStorage.getItem('userId'))
 const userType = sessionStorage.getItem('userType')
+const isStaff = userType === 'STAFF'
 
 // 定时刷新合同状态（每 5 秒）
 let contractRefreshInterval = null
@@ -170,6 +182,10 @@ const formatDate = (dateStr) => {
 }
 
 const getUserRole = (contract) => (contract.landlordId === currentUserId ? '房主' : '租客')
+const getUserRoleLabel = (contract) => {
+  if (isStaff) return '业务员'
+  return getUserRole(contract)
+}
 
 const getOtherPartyName = (contract) => (contract.landlordId === currentUserId ? contract.tenantName : contract.landlordName)
 
@@ -181,7 +197,9 @@ const getStatusType = (status) => {
     EXPIRED: 'info',
     TERMINATED: 'danger',
     TERMINATION_PENDING: 'warning',
+    TERMINATION_PENDING_STAFF_REVIEW: 'warning',
     PENDING_LANDLORD_APPROVAL: 'warning',
+    PENDING_STAFF_SIGNING: 'warning',
     PENDING_ADMIN_APPROVAL: 'warning'
   }
   return map[status] || ''
@@ -193,7 +211,9 @@ const getStatusText = (status) => {
     EXPIRED: '已到期',
     TERMINATED: '已终止',
     TERMINATION_PENDING: '待终止确认',
+    TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
     PENDING_LANDLORD_APPROVAL: '待房主审批',
+    PENDING_STAFF_SIGNING: '待业务员签约',
     PENDING_ADMIN_APPROVAL: '待管理员审批'
   }
   return map[status] || status
@@ -202,6 +222,11 @@ const getStatusText = (status) => {
 const fetchContracts = async () => {
   try {
     loading.value = true
+    if (isStaff) {
+      const res = await getMyStaffContracts()
+      allContracts.value = res.data || []
+      return
+    }
     if (activeTab.value === 'all') {
       const res = await getMyContracts()
       allContracts.value = res.data || []
@@ -256,11 +281,29 @@ const submitTerminate = async () => {
 const approveByLandlord = async (id) => {
   try {
     await approveContractByLandlord(id)
-    ElMessage.success('已提交管理员审批')
+    ElMessage.success('已进入业务员签约流程')
     fetchContracts()
   } catch (error) {
     ElMessage.error(error.response?.data || '操作失败')
   }
+}
+
+const handleUploadSignedFile = async (row) => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.pdf,.jpg,.jpeg,.png'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    try {
+      await uploadSignedContract(row.id, file)
+      ElMessage.success('上传成功，已提交管理员审核')
+      fetchContracts()
+    } catch (error) {
+      ElMessage.error(error.response?.data || '上传失败')
+    }
+  }
+  input.click()
 }
 
 const quickChat = (type, row) => {

@@ -12,4 +12,5 @@ import java.util.Optional;
 public interface TerminationRequestRepository extends JpaRepository<TerminationRequest, Long> {
     Optional<TerminationRequest> findByContractIdAndStatus(Long contractId, TerminationStatus status);
     List<TerminationRequest> findByResponderIdAndStatus(Long responderId, TerminationStatus status);
+    List<TerminationRequest> findByReviewStaffIdAndStatus(Long reviewStaffId, TerminationStatus status);
 }

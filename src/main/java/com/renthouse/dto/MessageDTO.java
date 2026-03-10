@@ -17,6 +17,10 @@ public class MessageDTO {
     private String senderName;
     private Long receiverId;
     private String receiverName;
+    private Long senderOperatorId;
+    private String senderOperatorName;
+    private Long receiverOperatorId;
+    private String receiverOperatorName;
     private Long relatedContractId;
     private Long relatedRequestId;
     private Boolean requireAction;

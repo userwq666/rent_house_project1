@@ -1,5 +1,6 @@
 package com.renthouse.security;
 
+import com.renthouse.enums.OperatorRole;
 import com.renthouse.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -16,9 +17,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Collections;
 
-/**
- * JWT认证过滤器：解析Authorization头部，验证Token并把用户信息写入SecurityContext。
- */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -34,22 +32,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
 
-            if (jwtUtil.validateToken(token)) {
-                Long userId = jwtUtil.extractUserId(token);
-                Long accountId = jwtUtil.extractAccountId(token);
+            if (jwtUtil.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
+                String principalType = jwtUtil.extractPrincipalType(token);
+                AuthenticatedUser principal = null;
 
-                if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    AuthenticatedUser principal = new AuthenticatedUser(userId, accountId);
+                if ("OPERATOR".equals(principalType)) {
+                    Long operatorId = jwtUtil.extractOperatorId(token);
+                    String role = jwtUtil.extractOperatorRole(token);
+                    if (operatorId != null && role != null) {
+                        principal = AuthenticatedUser.forOperator(operatorId, OperatorRole.valueOf(role));
+                    }
+                } else {
+                    Long userId = jwtUtil.extractUserId(token);
+                    Long accountId = jwtUtil.extractAccountId(token);
+                    if (userId != null && accountId != null) {
+                        principal = AuthenticatedUser.forUser(userId, accountId);
+                    }
+                }
+
+                if (principal != null) {
                     UsernamePasswordAuthenticationToken authenticationToken =
-                            new UsernamePasswordAuthenticationToken(
-                                    principal,
-                                    null,
-                                    Collections.emptyList()
-                            );
-
-                    authenticationToken.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
+                            new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
+                    authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 }
             }
