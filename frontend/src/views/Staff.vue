@@ -40,7 +40,7 @@
             <el-tag>{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="360" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'PENDING_STAFF_SIGNING'"
@@ -66,6 +66,22 @@
             >
               驳回终止
             </el-button>
+            <el-button
+              type="primary"
+              link
+              size="small"
+              @click="openChat(row.landlordId, row.landlordName)"
+            >
+              联系房主
+            </el-button>
+            <el-button
+              type="primary"
+              link
+              size="small"
+              @click="openChat(row.tenantId, row.tenantName)"
+            >
+              联系租客
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -75,10 +91,12 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getStaffPendingHouses, approveHouseByStaff, rejectHouseByStaff } from '../api/house'
 import { getMyStaffContracts, uploadSignedContract, respondTermination } from '../api/contract'
 
+const router = useRouter()
 const activeTab = ref('houses')
 const loading = ref(false)
 const pendingHouses = ref([])
@@ -166,6 +184,14 @@ const decideTermination = async (requestId, approve) => {
   }
 }
 
+const openChat = (receiverId, receiverName) => {
+  if (!receiverId) {
+    ElMessage.warning('缺少联系人信息')
+    return
+  }
+  router.push({ path: '/messages', query: { receiverId, receiverName } })
+}
+
 onMounted(loadData)
 </script>
 
@@ -176,4 +202,3 @@ onMounted(loadData)
 .sub { color: #909399; }
 .panel { padding: 20px; }
 </style>
-

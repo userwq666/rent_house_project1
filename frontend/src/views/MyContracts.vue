@@ -368,8 +368,9 @@ const quickChat = (type, row) => {
   if (!row) return
   if (type === 'user') {
     const receiverId = row.landlordId === currentUserId ? row.tenantId : row.landlordId
+    const receiverName = row.landlordId === currentUserId ? row.tenantName : row.landlordName
     if (receiverId) {
-      router.push({ path: '/messages', query: { receiverId } })
+      router.push({ path: '/messages', query: { receiverId, receiverName } })
     } else {
       ElMessage.warning('未找到对方信息')
     }

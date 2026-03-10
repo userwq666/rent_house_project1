@@ -137,17 +137,71 @@ public class MessageController {
     public ResponseEntity<?> sendMessage(@RequestBody SendMessageRequest request) {
         try {
             PrincipalContext principal = resolvePrincipal();
-            if (principal.userId == null) {
-                return ResponseEntity.badRequest().body("当前账号不支持主动聊天，仅普通用户可发起私聊");
-            }
-            if (SYSTEM_ID.equals(request.getReceiverId())) {
-                return ResponseEntity.badRequest().body("不能向系统发送消息");
-            }
-            if (request.getReceiverId() == null) {
+            Long receiverId = request.getReceiverId();
+            Long receiverOperatorId = request.getReceiverOperatorId();
+            if (receiverId == null && receiverOperatorId == null) {
                 return ResponseEntity.badRequest().body("接收方不能为空");
             }
-            messageService.sendMessage(principal.userId, request.getReceiverId(), request.getTitle(), request.getContent(),
-                    MessageType.USER_CHAT, null, null, false);
+
+            if (principal.userId != null) {
+                if (receiverOperatorId != null) {
+                    messageService.sendUserToOperatorMessage(
+                            principal.userId,
+                            receiverOperatorId,
+                            request.getTitle(),
+                            request.getContent(),
+                            MessageType.USER_CHAT,
+                            null,
+                            null,
+                            false
+                    );
+                } else {
+                    if (SYSTEM_ID.equals(receiverId)) {
+                        return ResponseEntity.badRequest().body("不能向系统发送消息");
+                    }
+                    messageService.sendMessage(
+                            principal.userId,
+                            receiverId,
+                            request.getTitle(),
+                            request.getContent(),
+                            MessageType.USER_CHAT,
+                            null,
+                            null,
+                            false
+                    );
+                }
+                return ResponseEntity.ok().build();
+            }
+
+            if (receiverOperatorId != null) {
+                if (SYSTEM_ID.equals(receiverOperatorId)) {
+                    return ResponseEntity.badRequest().body("不能向系统发送消息");
+                }
+                messageService.sendOperatorMessage(
+                        principal.operatorId,
+                        receiverOperatorId,
+                        request.getTitle(),
+                        request.getContent(),
+                        MessageType.USER_CHAT,
+                        null,
+                        null,
+                        false
+                );
+            } else {
+                if (SYSTEM_ID.equals(receiverId)) {
+                    return ResponseEntity.badRequest().body("不能向系统发送消息");
+                }
+                messageService.sendOperatorToUserMessage(
+                        principal.operatorId,
+                        receiverId,
+                        request.getTitle(),
+                        request.getContent(),
+                        MessageType.USER_CHAT,
+                        null,
+                        null,
+                        false
+                );
+            }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());

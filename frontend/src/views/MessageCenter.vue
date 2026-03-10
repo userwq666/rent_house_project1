@@ -108,7 +108,6 @@
         <div class="chat-input">
           <div class="input-container">
             <el-input
-              v-if="!isOperator"
               v-model="newMessage"
               type="textarea"
               :autosize="{ minRows: 2, maxRows: 6 }"
@@ -116,8 +115,7 @@
               @keydown.enter.exact.prevent="sendMessage"
             />
             <div class="chat-actions">
-              <el-button v-if="!isOperator" type="primary" @click="sendMessage" :loading="sending" class="send-button">发送</el-button>
-              <div v-else class="operator-tip">业务员账号仅支持查看系统待办消息</div>
+              <el-button type="primary" @click="sendMessage" :loading="sending" class="send-button">发送</el-button>
             </div>
           </div>
         </div>
@@ -328,6 +326,22 @@ const isSentMessage = (message) => {
   return message.senderId === currentUserId
 }
 
+const getContactMode = (contact) => {
+  const contactId = getContactId(contact)
+  if (!contactId) return null
+  if (contactId === -1) return 'SYSTEM'
+  if (isOperator) {
+    const isOperatorTarget =
+      (contact.senderOperatorId && contact.senderId === contactId) ||
+      (contact.receiverOperatorId && contact.receiverId === contactId)
+    return isOperatorTarget ? 'OPERATOR' : 'USER'
+  }
+  const isOperatorTarget =
+    (contact.senderOperatorId && contact.senderId === contactId) ||
+    (contact.receiverOperatorId && contact.receiverId === contactId)
+  return isOperatorTarget ? 'OPERATOR' : 'USER'
+}
+
 // 处理消息操作（同意/拒绝）
 const handleMessageAction = async ({ messageId, action }) => {
   try {
@@ -485,10 +499,22 @@ const sendMessage = async () => {
       ElMessage.warning('该会话暂无法发送消息')
       return
     }
-    await sendApiMessage({
-      receiverId: contactId,
+    if (contactId === -1) {
+      ElMessage.warning('不能向系统会话发送消息')
+      return
+    }
+    const contactMode = getContactMode(currentContact.value)
+    const payload = {
       title: '聊天消息',
       content: newMessage.value
+    }
+    if (contactMode === 'OPERATOR') {
+      payload.receiverOperatorId = contactId
+    } else {
+      payload.receiverId = contactId
+    }
+    await sendApiMessage({
+      ...payload
     })
 
     newMessage.value = ''
@@ -531,8 +557,8 @@ const handleUnreadCountChange = () => {
 
 // 处理路由参数中的 receiverId（用于"联系房主"功能）
 const handleReceiverIdParam = async () => {
-  if (isOperator) return
   const receiverId = route.query.receiverId
+  const receiverName = route.query.receiverName
   if (receiverId) {
     // 等待联系人加载完成
     await nextTick()
@@ -552,7 +578,7 @@ const handleReceiverIdParam = async () => {
         id: `temp-${receiverId}`,
         senderId: Number(receiverId),
         receiverId: null,
-        senderName: '房主',
+        senderName: receiverName || '对方',
         receiverName: null,
         content: '点击开始聊天',
         createdAt: new Date(),
