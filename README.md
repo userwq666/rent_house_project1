@@ -193,6 +193,7 @@ src/main/resources/schema-v3.sql
 
 - `docs/DEVELOPMENT.md`
 - `docs/development-guide.md`
+- `docs/ENCODING.md`（编码规范与乱码排查）
 
 ## 后续优化方向
 
