@@ -166,6 +166,19 @@ public class ContractController {
         }
     }
 
+    @PutMapping("/{id}/landlord/reject")
+    public ResponseEntity<?> rejectByLandlord(@PathVariable Long id,
+                                              @RequestBody(required = false) Map<String, String> requestBody) {
+        try {
+            Long userId = AuthUtil.getCurrentUserId();
+            String reason = requestBody == null ? null : requestBody.get("reason");
+            contractService.rejectByLandlord(id, userId, reason);
+            return ResponseEntity.ok("已拒绝租房申请");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("操作失败: " + e.getMessage());
+        }
+    }
+
     @PostMapping("/{id}/signed-file")
     public ResponseEntity<?> uploadSignedContract(@PathVariable Long id,
                                                   @RequestParam("file") MultipartFile file) {

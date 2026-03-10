@@ -57,6 +57,9 @@ public class Message {
     @Column(name = "related_contract_id")
     private Long relatedContractId;
 
+    @Column(name = "related_house_id")
+    private Long relatedHouseId;
+
     @Column(name = "related_request_id")
     private Long relatedRequestId;
 

@@ -62,3 +62,13 @@ export function getUserInfo(username) {
     method: 'get'
   })
 }
+
+/**
+ * 统一查询联系人（支持 USER/OPERATOR）
+ */
+export function lookupContact(username) {
+  return request({
+    url: `/api/auth/contact/${encodeURIComponent(username)}`,
+    method: 'get'
+  })
+}

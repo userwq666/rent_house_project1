@@ -503,6 +503,40 @@ public class ContractService {
     }
 
     @Transactional
+    public void rejectByLandlord(Long contractId, Long landlordId, String reason) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new RuntimeException("合同不存在"));
+
+        if (!contract.getLandlord().getId().equals(landlordId)) {
+            throw new RuntimeException("无权审批该合同");
+        }
+
+        if (contract.getStatus() != ContractStatus.PENDING_LANDLORD_APPROVAL) {
+            throw new RuntimeException("合同状态异常，无法拒绝");
+        }
+
+        String rejectReason = reason == null || reason.isBlank() ? "房东拒绝租房申请" : reason.trim();
+        contract.setStatus(ContractStatus.REJECTED);
+        contract.setNotes(rejectReason);
+        contractRepository.save(contract);
+
+        House house = contract.getHouse();
+        house.setStatus(HouseStatus.AVAILABLE);
+        houseRepository.save(house);
+
+        messageService.sendMessage(
+                null,
+                contract.getTenant().getId(),
+                "租房申请被拒绝",
+                "房东拒绝了本次租房申请，原因：" + rejectReason,
+                MessageType.CONTRACT_REJECTION_NOTICE,
+                contract.getId(),
+                null,
+                false
+        );
+    }
+
+    @Transactional
     public void uploadSignedContract(Long contractId, Long operatorId, MultipartFile file) {
         OperatorAccount operator = operatorAccountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("业务员不存在"));

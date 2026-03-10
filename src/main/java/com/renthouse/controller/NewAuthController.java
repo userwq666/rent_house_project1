@@ -4,6 +4,7 @@ import com.renthouse.domain.Account;
 import com.renthouse.domain.OperatorAccount;
 import com.renthouse.domain.User;
 import com.renthouse.dto.AuthResponse;
+import com.renthouse.dto.ContactLookupResponse;
 import com.renthouse.dto.LoginRequest;
 import com.renthouse.dto.UpdateProfileRequest;
 import com.renthouse.dto.UserProfileResponse;
@@ -186,6 +187,59 @@ public class NewAuthController {
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("更新个人信息失败：" + e.getMessage());
+        }
+    }
+
+    @GetMapping("/contact/{username}")
+    public ResponseEntity<?> lookupContact(@PathVariable String username) {
+        try {
+            String target = username == null ? "" : username.trim();
+            if (target.isEmpty()) {
+                return ResponseEntity.badRequest().body("用户名不能为空");
+            }
+
+            String currentUsername;
+            try {
+                Long currentUserId = AuthUtil.getCurrentUserId();
+                User currentUser = accountService.findUserById(currentUserId)
+                        .orElseThrow(() -> new RuntimeException("用户不存在"));
+                currentUsername = currentUser.getAccount().getUsername();
+            } catch (Exception ignored) {
+                Long currentOperatorId = AuthUtil.getCurrentOperatorId();
+                OperatorAccount currentOperator = operatorAccountService.findById(currentOperatorId)
+                        .orElseThrow(() -> new RuntimeException("操作员不存在"));
+                currentUsername = currentOperator.getUsername();
+            }
+
+            if (target.equals(currentUsername)) {
+                return ResponseEntity.badRequest().body("不能添加自己为联系人");
+            }
+
+            OperatorAccount operator = operatorAccountService.findByUsername(target).orElse(null);
+            if (operator != null) {
+                ContactLookupResponse resp = new ContactLookupResponse();
+                resp.setPrincipalType("OPERATOR");
+                resp.setOperatorId(operator.getId());
+                resp.setUsername(operator.getUsername());
+                resp.setDisplayName(operator.getDisplayName());
+                resp.setPhone(operator.getPhone());
+                return ResponseEntity.ok(resp);
+            }
+
+            Account account = accountService.findByUsername(target)
+                    .orElseThrow(() -> new RuntimeException("联系人不存在"));
+            User user = accountService.findUserByAccountId(account.getId())
+                    .orElseThrow(() -> new RuntimeException("联系人不存在"));
+
+            ContactLookupResponse resp = new ContactLookupResponse();
+            resp.setPrincipalType("USER");
+            resp.setUserId(user.getId());
+            resp.setUsername(account.getUsername());
+            resp.setDisplayName(user.getRealName());
+            resp.setPhone(user.getPhone());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("获取联系人失败：" + e.getMessage());
         }
     }
 

@@ -12,7 +12,7 @@
         <div class="list-header">
           <h3>{{ isOperator ? '待办消息' : '联系人' }}</h3>
           <div class="header-actions">
-            <el-button v-if="!isOperator" type="primary" link @click="showAddContact = true">
+            <el-button type="primary" link @click="showAddContact = true">
               <el-icon><Plus /></el-icon>
             </el-button>
             <el-button type="primary" link @click="loadContacts">刷新</el-button>
@@ -21,13 +21,13 @@
         <el-scrollbar class="contact-scroll">
           <div
             v-for="contact in contacts"
-            :key="contact.id"
+            :key="getContactUnique(contact)"
             class="contact-item-wrapper"
           >
             <div class="contact-item-container">
               <div
                 class="contact-item"
-                :class="{ active: activeContact && activeContact.id === contact.id }"
+                :class="{ active: activeContactKey === getContactUnique(contact) }"
                 @click="selectContact(contact)"
               >
                 <div class="contact-avatar">
@@ -73,7 +73,7 @@
             >
 
               <div
-                v-if="!message.requireAction"
+                v-if="!message.requireAction || getActionConfig(message).actionMode === 'none'"
                 class="message"
                 :class="{ sent: isSentMessage(message), received: !isSentMessage(message) }"
               >
@@ -97,8 +97,16 @@
                 :status="message.status"
                 :created-at="message.createdAt"
                 :contract-id="message.relatedContractId"
+                :house-id="message.relatedHouseId"
                 :require-action="message.requireAction"
-                @action="handleMessageAction"
+                :action-mode="getActionConfig(message).actionMode"
+                :primary-text="getActionConfig(message).primaryText"
+                :secondary-text="getActionConfig(message).secondaryText"
+                :primary-button-type="getActionConfig(message).primaryButtonType"
+                :secondary-button-type="getActionConfig(message).secondaryButtonType"
+                :accepted-text="getActionConfig(message).acceptedText"
+                :rejected-text="getActionConfig(message).rejectedText"
+                @action="payload => handleMessageAction(payload, message)"
               />
 
             </div>

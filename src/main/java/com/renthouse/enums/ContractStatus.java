@@ -4,6 +4,7 @@ public enum ContractStatus {
     ACTIVE("进行中"),
     EXPIRED("已到期"),
     TERMINATED("已终止"),
+    REJECTED("已拒绝"),
     TERMINATION_PENDING("待终止确认"),
     TERMINATION_PENDING_COUNTERPARTY("待对方确认终止"),
     TERMINATION_PENDING_STAFF_REVIEW("待业务员审核终止"),

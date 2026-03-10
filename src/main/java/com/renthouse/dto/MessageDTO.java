@@ -22,8 +22,12 @@ public class MessageDTO {
     private Long receiverOperatorId;
     private String receiverOperatorName;
     private Long relatedContractId;
+    private Long relatedHouseId;
     private Long relatedRequestId;
     private Boolean requireAction;
+    private String contactType;
+    private String contactKey;
+    private Long contactId;
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
     private long unreadCount; // 未读消息数量

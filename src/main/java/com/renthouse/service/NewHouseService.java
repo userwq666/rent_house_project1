@@ -131,6 +131,7 @@ public class NewHouseService {
                 "房源待审核",
                 String.format("房东 %s 发布了新房源《%s》，请审核", user.getRealName(), saved.getTitle()),
                 null,
+                saved.getId(),
                 null,
                 true,
                 MessageType.HOUSE_PENDING_STAFF_REVIEW
@@ -159,6 +160,7 @@ public class NewHouseService {
                 String.format("房源《%s》已通过业务员审核并上架", house.getTitle()),
                 MessageType.HOUSE_REVIEW_RESULT,
                 null,
+                house.getId(),
                 null,
                 false
         );
@@ -185,6 +187,7 @@ public class NewHouseService {
                 String.format("房源《%s》审核未通过，原因：%s", house.getTitle(), house.getReviewComment()),
                 MessageType.HOUSE_REVIEW_RESULT,
                 null,
+                house.getId(),
                 null,
                 false
         );
@@ -228,6 +231,7 @@ public class NewHouseService {
                 "房源待复审",
                 String.format("房源《%s》已更新，请复审", house.getTitle()),
                 null,
+                updated.getId(),
                 null,
                 true,
                 MessageType.HOUSE_PENDING_STAFF_REVIEW

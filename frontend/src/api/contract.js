@@ -92,6 +92,14 @@ export function approveContractByLandlord(id) {
   })
 }
 
+export function rejectContractByLandlord(id, data) {
+  return request({
+    url: `/api/contracts/${id}/landlord/reject`,
+    method: 'put',
+    data
+  })
+}
+
 export function getAvailableStaffOptions() {
   return request({
     url: '/api/contracts/staff/options',

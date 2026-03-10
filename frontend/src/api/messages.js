@@ -14,10 +14,11 @@ export function getMessageContacts() {
   })
 }
 
-export function getChatMessages(contactId) {
+export function getChatMessages(contactId, contactType) {
   return request({
     url: `/api/messages/chat/${contactId}`,
-    method: 'get'
+    method: 'get',
+    params: contactType ? { contactType } : undefined
   })
 }
 
@@ -68,9 +69,10 @@ export function getUnreadMessageCount() {
 /**
  * 归档与特定联系人的所有消息（前端隐藏，数据库保留）
  */
-export function archiveContactMessages(contactId) {
+export function archiveContactMessages(contactId, contactType) {
   return request({
     url: `/api/messages/archive/${contactId}`,
-    method: 'post'
+    method: 'post',
+    params: contactType ? { contactType } : undefined
   })
 }

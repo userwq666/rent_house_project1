@@ -79,13 +79,14 @@ public class MessageController {
     }
 
     @GetMapping("/chat/{contactId}")
-    public ResponseEntity<?> getChatMessages(@PathVariable Long contactId) {
+    public ResponseEntity<?> getChatMessages(@PathVariable Long contactId,
+                                             @RequestParam(required = false) String contactType) {
         try {
             PrincipalContext principal = resolvePrincipal();
             if (principal.userId != null) {
-                return ResponseEntity.ok(messageService.getChatMessages(principal.userId, contactId));
+                return ResponseEntity.ok(messageService.getChatMessages(principal.userId, contactId, contactType));
             }
-            return ResponseEntity.ok(messageService.getOperatorChatMessages(principal.operatorId, contactId));
+            return ResponseEntity.ok(messageService.getOperatorChatMessages(principal.operatorId, contactId, contactType));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -219,10 +220,11 @@ public class MessageController {
     }
 
     @PostMapping("/archive/{contactId}")
-    public ResponseEntity<?> archiveContactMessages(@PathVariable Long contactId) {
+    public ResponseEntity<?> archiveContactMessages(@PathVariable Long contactId,
+                                                    @RequestParam(required = false) String contactType) {
         try {
             Long userId = AuthUtil.getCurrentUserId();
-            messageService.archiveContactMessages(userId, contactId);
+            messageService.archiveContactMessages(userId, contactId, contactType);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
