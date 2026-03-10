@@ -1,0 +1,7 @@
+{
+  "workbench.view.showQuietly": {
+    "workbench.panel.output": false
+  },
+  "workbench.activityBar.autoHide": false,
+  "workbench.activityBar.location": "default"
+}

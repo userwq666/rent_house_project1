@@ -1,0 +1,14 @@
+package com.renthouse.enums;
+
+/**
+ * 消息类型
+ */
+public enum MessageType {
+    TERMINATION_REQUEST,
+    TERMINATION_RESPONSE,
+    FORCE_TERMINATION_NOTICE,
+    ADMIN_NOTIFICATION,
+    CONTRACT_APPROVAL_NOTICE,
+    CONTRACT_REJECTION_NOTICE,
+    USER_CHAT
+}
