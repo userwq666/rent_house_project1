@@ -67,6 +67,12 @@ const routes = [
     name: 'Admin',
     component: () => import('../views/Admin.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/staff',
+    name: 'Staff',
+    component: () => import('../views/Staff.vue'),
+    meta: { requiresAuth: true, requiresStaff: true }
   }
 ]
 
@@ -93,14 +99,22 @@ router.beforeEach((to, from, next) => {
     console.log('非管理员尝试访问管理页面，拦截')
     ElMessage.warning('权限不足')
     next('/home')
+  } else if (to.meta.requiresStaff && userType !== 'STAFF') {
+    ElMessage.warning('仅业务员可访问')
+    next('/home')
   } else if (to.path === '/my-houses' && userType === 'ADMIN') {
     // 管理员不能访问我的房源页面
     console.log('管理员访问房源管理页面，拦截')
     ElMessage.warning('管理员不能访问房源管理页面')
     next('/home')
+  } else if (to.path === '/my-houses' && userType === 'STAFF') {
+    ElMessage.warning('业务员不能访问我的房源页面')
+    next('/staff')
   } else if (to.path === '/login' && token) {
     console.log('已登录用户访问登录页，重定向')
-    next('/home')
+    if (userType === 'ADMIN') next('/admin')
+    else if (userType === 'STAFF') next('/staff')
+    else next('/home')
   } else {
     console.log('允许访问')
     next()

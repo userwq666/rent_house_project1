@@ -10,9 +10,9 @@
       <!-- 联系人列表 -->
       <div class="contact-list">
         <div class="list-header">
-          <h3>联系人</h3>
+          <h3>{{ isOperator ? '待办消息' : '联系人' }}</h3>
           <div class="header-actions">
-            <el-button type="primary" link @click="showAddContact = true">
+            <el-button v-if="!isOperator" type="primary" link @click="showAddContact = true">
               <el-icon><Plus /></el-icon>
             </el-button>
             <el-button type="primary" link @click="loadContacts">刷新</el-button>
@@ -107,6 +107,7 @@
         <div class="chat-input">
           <div class="input-container">
             <el-input
+              v-if="!isOperator"
               v-model="newMessage"
               type="textarea"
               :autosize="{ minRows: 2, maxRows: 6 }"
@@ -114,7 +115,8 @@
               @keydown.enter.exact.prevent="sendMessage"
             />
             <div class="chat-actions">
-              <el-button type="primary" @click="sendMessage" :loading="sending" class="send-button">发送</el-button>
+              <el-button v-if="!isOperator" type="primary" @click="sendMessage" :loading="sending" class="send-button">发送</el-button>
+              <div v-else class="operator-tip">业务员账号仅支持查看系统待办消息</div>
             </div>
           </div>
         </div>
@@ -148,6 +150,7 @@ import { ChatLineSquare, Plus } from '@element-plus/icons-vue'
 import { getMessageContacts, getChatMessages, sendMessage as sendApiMessage, updateMessageStatus, archiveContactMessages } from '../api/messages'
 import { getUserInfo } from '../api/auth'
 import MessageActionCard from '../components/MessageActionCard.vue'
+const isOperator = sessionStorage.getItem('principalType') === 'OPERATOR'
 
 const route = useRoute()
 const contacts = ref([])
@@ -892,6 +895,11 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   transition: all 0.3s ease;
+}
+
+.operator-tip {
+  color: #909399;
+  font-size: 13px;
 }
 
 .send-button:hover {

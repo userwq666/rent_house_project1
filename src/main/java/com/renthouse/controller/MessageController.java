@@ -54,8 +54,13 @@ public class MessageController {
     @GetMapping("/contacts")
     public ResponseEntity<?> getMessageContacts() {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            return ResponseEntity.ok(messageService.getMessageContacts(userId));
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                return ResponseEntity.ok(messageService.getMessageContacts(userId));
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                return ResponseEntity.ok(messageService.getOperatorMessageContacts(operatorId));
+            }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -64,8 +69,13 @@ public class MessageController {
     @GetMapping("/chat/{contactId}")
     public ResponseEntity<?> getChatMessages(@PathVariable Long contactId) {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            return ResponseEntity.ok(messageService.getChatMessages(userId, contactId));
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                return ResponseEntity.ok(messageService.getChatMessages(userId, contactId));
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                return ResponseEntity.ok(messageService.getOperatorChatMessages(operatorId, contactId));
+            }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -108,8 +118,13 @@ public class MessageController {
     @PostMapping("/read-all")
     public ResponseEntity<?> markAllAsRead() {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            messageService.markAllAsRead(userId);
+            try {
+                Long userId = AuthUtil.getCurrentUserId();
+                messageService.markAllAsRead(userId);
+            } catch (Exception ignored) {
+                Long operatorId = AuthUtil.getCurrentOperatorId();
+                messageService.markAllOperatorMessagesAsRead(operatorId);
+            }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -130,7 +145,7 @@ public class MessageController {
                     MessageType.USER_CHAT, null, null, false);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body("当前账号不支持主动聊天，仅可查看待办消息");
         }
     }
 

@@ -7,13 +7,14 @@
       </div>
       <div class="nav" v-if="isLoggedIn">
         <el-button text :class="{ active: $route.path === '/home' }" @click="router.push('/home')">首页</el-button>
-        <el-button v-if="auth.userType !== 'ADMIN'" text @click="router.push('/my-houses')">我的房源</el-button>
-        <el-button v-if="auth.userType !== 'ADMIN'" text @click="router.push('/my-contracts')">我的合同</el-button>
+        <el-button v-if="auth.userType === 'USER'" text @click="router.push('/my-houses')">我的房源</el-button>
+        <el-button v-if="auth.userType === 'USER'" text @click="router.push('/my-contracts')">我的合同</el-button>
         <el-button text @click="router.push('/messages')">
           消息中心
           <el-badge v-if="unreadCount > 0" :value="unreadCount" class="badge-item" />
         </el-button>
         <el-button v-if="auth.userType === 'ADMIN'" text type="danger" @click="router.push('/admin')">管理后台</el-button>
+        <el-button v-if="auth.userType === 'STAFF'" text type="warning" @click="router.push('/staff')">业务后台</el-button>
         <el-button text @click="router.push('/profile')">个人中心</el-button>
       </div>
       <div class="actions">
@@ -35,7 +36,8 @@
         <p class="sub">连接房东与租客，提供安全、透明、便捷的房屋租赁体验。从这里开始你的新生活。</p>
         <div class="hero-buttons">
           <el-button type="primary" size="large" class="glow" @click="scrollToSearch">开始找房</el-button>
-          <el-button v-if="auth.userType !== 'ADMIN'" size="large" @click="$router.push('/house/publish')">我是房东，发布房源</el-button>
+          <el-button v-if="auth.userType === 'USER'" size="large" @click="$router.push('/house/publish')">我是房东，发布房源</el-button>
+          <el-button v-if="auth.userType === 'STAFF'" size="large" type="warning" @click="$router.push('/staff')">进入业务后台</el-button>
         </div>
       </div>
     </div>

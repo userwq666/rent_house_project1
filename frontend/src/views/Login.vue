@@ -100,7 +100,7 @@ const handleLogin = async () => {
         console.log('管理员登录，跳转至后台')
         router.push('/admin')
       } else if (data.userType === 'STAFF') {
-        router.push('/my-contracts')
+        router.push('/staff')
       } else {
         const redirectPath = route.query.redirect || '/home'
         console.log('普通用户登录，跳转至:', redirectPath)

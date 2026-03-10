@@ -71,6 +71,28 @@ export function getAllHousesAdmin() {
   })
 }
 
+export function getStaffPendingHouses() {
+  return request({
+    url: '/api/houses/staff/pending',
+    method: 'get'
+  })
+}
+
+export function approveHouseByStaff(id) {
+  return request({
+    url: `/api/houses/${id}/staff/approve`,
+    method: 'put'
+  })
+}
+
+export function rejectHouseByStaff(id, reason) {
+  return request({
+    url: `/api/houses/${id}/staff/reject`,
+    method: 'put',
+    data: { reason }
+  })
+}
+
 /**
  * 下架房源
  */

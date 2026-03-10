@@ -16,6 +16,9 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     @Query("SELECT m FROM Message m WHERE (m.sender.id = :userId OR m.receiver.id = :userId) ORDER BY m.createdAt DESC")
     List<Message> findBySenderIdOrReceiverIdOrderByCreatedAtDesc(@Param("userId") Long userId);
 
+    @Query("SELECT m FROM Message m WHERE (m.senderOperatorId = :operatorId OR m.receiverOperatorId = :operatorId) ORDER BY m.createdAt DESC")
+    List<Message> findBySenderOperatorIdOrReceiverOperatorIdOrderByCreatedAtDesc(@Param("operatorId") Long operatorId);
+
     long countByReceiverIdAndStatus(Long receiverId, MessageStatus status);
 
     List<Message> findByReceiverIdAndStatus(Long receiverId, MessageStatus status);

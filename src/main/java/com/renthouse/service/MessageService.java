@@ -102,6 +102,35 @@ public class MessageService {
                 .collect(Collectors.toList());
     }
 
+    public List<MessageDTO> getOperatorMessageContacts(Long operatorId) {
+        List<Message> messages = messageRepository.findBySenderOperatorIdOrReceiverOperatorIdOrderByCreatedAtDesc(operatorId);
+        Map<Long, List<Message>> grouped = messages.stream()
+                .collect(Collectors.groupingBy(msg -> {
+                    if (msg.getSenderOperatorId() != null && msg.getSenderOperatorId().equals(operatorId)) {
+                        return msg.getReceiverOperatorId() == null ? SYSTEM_ID : msg.getReceiverOperatorId();
+                    }
+                    return msg.getSenderOperatorId() == null ? SYSTEM_ID : msg.getSenderOperatorId();
+                }));
+
+        return grouped.values().stream()
+                .map(list -> {
+                    Message latest = list.stream().max(Comparator.comparing(Message::getCreatedAt)).orElse(null);
+                    if (latest == null) {
+                        return null;
+                    }
+                    long unreadCount = list.stream()
+                            .filter(msg -> msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(operatorId))
+                            .filter(msg -> msg.getStatus() == MessageStatus.UNREAD)
+                            .count();
+                    MessageDTO dto = convert(latest);
+                    dto.setUnreadCount(unreadCount);
+                    return dto;
+                })
+                .filter(dto -> dto != null)
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
     public List<MessageDTO> getMessageContacts(Long userId) {
         List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(userId);
         Map<Long, List<Message>> groupedMessages = messages.stream()
@@ -175,6 +204,45 @@ public class MessageService {
         return chatMessages.stream().map(this::convert).collect(Collectors.toList());
     }
 
+    public List<MessageDTO> getOperatorChatMessages(Long operatorId, Long contactId) {
+        List<Message> messages = messageRepository.findBySenderOperatorIdOrReceiverOperatorIdOrderByCreatedAtDesc(operatorId);
+
+        List<Message> chatMessages;
+        if (contactId != null && contactId.equals(SYSTEM_ID)) {
+            chatMessages = messages.stream()
+                    .filter(msg -> msg.getSenderOperatorId() == null
+                            && msg.getReceiverOperatorId() != null
+                            && msg.getReceiverOperatorId().equals(operatorId))
+                    .sorted(Comparator.comparing(Message::getCreatedAt))
+                    .collect(Collectors.toList());
+        } else {
+            chatMessages = messages.stream()
+                    .filter(msg ->
+                            (msg.getSenderOperatorId() != null && msg.getSenderOperatorId().equals(contactId) &&
+                                    msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(operatorId)) ||
+                                    (msg.getSenderOperatorId() != null && msg.getSenderOperatorId().equals(operatorId) &&
+                                            msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(contactId))
+                    )
+                    .sorted(Comparator.comparing(Message::getCreatedAt))
+                    .collect(Collectors.toList());
+        }
+
+        List<Message> unreadMessages = chatMessages.stream()
+                .filter(msg -> msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(operatorId)
+                        && msg.getStatus() == MessageStatus.UNREAD)
+                .toList();
+
+        for (Message message : unreadMessages) {
+            message.setStatus(MessageStatus.READ);
+            message.setReadAt(LocalDateTime.now());
+        }
+        if (!unreadMessages.isEmpty()) {
+            messageRepository.saveAll(unreadMessages);
+        }
+
+        return chatMessages.stream().map(this::convert).collect(Collectors.toList());
+    }
+
     public long getUnreadMessageCount(Long userId) {
         return messageRepository.countByReceiverIdAndStatus(userId, MessageStatus.UNREAD);
     }
@@ -219,6 +287,15 @@ public class MessageService {
 
     public void markAllAsRead(Long userId) {
         List<Message> unreadMessages = messageRepository.findByReceiverIdAndStatus(userId, MessageStatus.UNREAD);
+        for (Message message : unreadMessages) {
+            message.setStatus(MessageStatus.READ);
+            message.setReadAt(LocalDateTime.now());
+        }
+        messageRepository.saveAll(unreadMessages);
+    }
+
+    public void markAllOperatorMessagesAsRead(Long operatorId) {
+        List<Message> unreadMessages = messageRepository.findByReceiverOperatorIdAndStatus(operatorId, MessageStatus.UNREAD);
         for (Message message : unreadMessages) {
             message.setStatus(MessageStatus.READ);
             message.setReadAt(LocalDateTime.now());
@@ -274,12 +351,20 @@ public class MessageService {
             dto.setSenderId(message.getSender().getId());
             dto.setSenderName(message.getSender().getRealName());
         } else {
-            dto.setSenderId(SYSTEM_ID);
-            dto.setSenderName(SYSTEM_NAME);
+            if (message.getSenderOperatorId() != null) {
+                dto.setSenderId(message.getSenderOperatorId());
+                dto.setSenderName(message.getSenderOperatorName() == null ? SYSTEM_NAME : message.getSenderOperatorName());
+            } else {
+                dto.setSenderId(SYSTEM_ID);
+                dto.setSenderName(SYSTEM_NAME);
+            }
         }
         if (message.getReceiver() != null) {
             dto.setReceiverId(message.getReceiver().getId());
             dto.setReceiverName(message.getReceiver().getRealName());
+        } else if (message.getReceiverOperatorId() != null) {
+            dto.setReceiverId(message.getReceiverOperatorId());
+            dto.setReceiverName(message.getReceiverOperatorName());
         }
         dto.setSenderOperatorId(message.getSenderOperatorId());
         dto.setSenderOperatorName(message.getSenderOperatorName());
