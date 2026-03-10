@@ -12,6 +12,5 @@ CREATE DATABASE easy_rent
     COLLATE utf8mb4_unicode_ci;
 
 USE easy_rent;
-SOURCE src/main/resources/schema-v3.sql;
 
 SELECT '数据库 easy_rent 初始化完成' AS message;
