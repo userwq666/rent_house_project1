@@ -1,4 +1,4 @@
-﻿-- ==========================================
+-- ==========================================
 -- easy_rent 表结构（v3）
 -- 说明：该脚本用于“新库初始化”，不包含 ALTER 增量语句
 -- ==========================================
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS contracts (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING_LANDLORD_APPROVAL'
-        COMMENT 'PENDING_LANDLORD_APPROVAL/PENDING_STAFF_SIGNING/PENDING_ADMIN_APPROVAL/ACTIVE/EXPIRED/TERMINATED/TERMINATION_PENDING/TERMINATION_PENDING_STAFF_REVIEW',
+        COMMENT 'PENDING_LANDLORD_APPROVAL/PENDING_STAFF_SIGNING/PENDING_ADMIN_APPROVAL/ACTIVE/EXPIRED/TERMINATED/TERMINATION_PENDING/TERMINATION_PENDING_COUNTERPARTY/TERMINATION_PENDING_STAFF_REVIEW/TERMINATION_FORCE_PENDING_JOINT_REVIEW',
     signed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
     assigned_staff_id BIGINT NULL COMMENT '签约跟进业务员',
@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS contracts (
     signed_contract_name VARCHAR(255) NULL COMMENT '签约文件原名',
     signed_contract_uploaded_at DATETIME NULL,
     signed_contract_uploaded_by BIGINT NULL COMMENT '上传业务员ID',
+    landlord_termination_reject_count INT DEFAULT 0 COMMENT '房东发起终止被拒次数',
+    tenant_termination_reject_count INT DEFAULT 0 COMMENT '租客发起终止被拒次数',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (house_id) REFERENCES houses(id) ON DELETE CASCADE,
@@ -116,6 +118,13 @@ CREATE TABLE IF NOT EXISTS termination_requests (
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/REJECTED/FORCE_TERMINATED',
     reason TEXT,
     force_reason TEXT,
+    force_request TINYINT(1) DEFAULT 0,
+    evidence_urls TEXT,
+    counterparty_comment TEXT,
+    staff_approved TINYINT(1) DEFAULT 0,
+    admin_approved TINYINT(1) DEFAULT 0,
+    staff_follow_up_plan TEXT,
+    admin_decision_comment TEXT,
     admin_notified TINYINT(1) DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -154,4 +163,3 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_msg_status (status),
     INDEX idx_msg_related_contract (related_contract_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息中心';
-

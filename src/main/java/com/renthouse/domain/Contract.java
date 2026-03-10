@@ -71,6 +71,12 @@ public class Contract {
     @Column(name = "signed_contract_uploaded_by")
     private Long signedContractUploadedBy;
 
+    @Column(name = "landlord_termination_reject_count")
+    private Integer landlordTerminationRejectCount = 0;
+
+    @Column(name = "tenant_termination_reject_count")
+    private Integer tenantTerminationRejectCount = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

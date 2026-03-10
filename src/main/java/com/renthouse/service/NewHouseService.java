@@ -363,7 +363,9 @@ public class NewHouseService {
                 ContractStatus.PENDING_ADMIN_APPROVAL,
                 ContractStatus.ACTIVE,
                 ContractStatus.TERMINATION_PENDING,
-                ContractStatus.TERMINATION_PENDING_STAFF_REVIEW
+                ContractStatus.TERMINATION_PENDING_COUNTERPARTY,
+                ContractStatus.TERMINATION_PENDING_STAFF_REVIEW,
+                ContractStatus.TERMINATION_FORCE_PENDING_JOINT_REVIEW
         ));
     }
 }

@@ -10,4 +10,5 @@ public class TerminateContractRequest {
     private String reason;
     private Boolean force = false;
     private String forceReason;
+    private String evidenceUrls;
 }

@@ -36,7 +36,7 @@
               </template>
             </el-table-column>
             <el-table-column prop="viewCount" label="浏览" width="100" />
-            <el-table-column label="操作" width="200" fixed="right">
+            <el-table-column label="操作" width="320" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" text @click="viewHouse(row.id)">查看</el-button>
                 <el-button v-if="row.status !== 'RENTED'" size="small" type="danger" @click="deleteHouseAdmin(row.id)">
@@ -96,6 +96,22 @@
                     @click="terminateContractAdmin(row.id)"
                   >
                     终止
+                  </el-button>
+                  <el-button
+                    v-if="row.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW' && row.terminationRequestId"
+                    size="small"
+                    type="primary"
+                    @click="decideForceTerminationByAdmin(row, true)"
+                  >
+                    强制终止通过
+                  </el-button>
+                  <el-button
+                    v-if="row.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW' && row.terminationRequestId"
+                    size="small"
+                    type="warning"
+                    @click="decideForceTerminationByAdmin(row, false)"
+                  >
+                    强制终止驳回
                   </el-button>
                 </div>
               </template>
@@ -213,7 +229,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAllHousesAdmin, deleteHouse } from '../api/house'
-import { getAllContracts, adminTerminateContract, approveContractByAdmin } from '../api/contract'
+import { getAllContracts, adminTerminateContract, approveContractByAdmin, rejectContractByAdmin, respondTermination } from '../api/contract'
 import { fetchAllUsers, updateUserRestrictions, updateUserStatus, fetchStaffList, createStaff, updateStaffStatus } from '../api/admin'
 
 const router = useRouter()
@@ -400,11 +416,32 @@ const rejectContract = async (id) => {
       inputPattern: /.+/, 
       inputErrorMessage: '请填写拒绝原因'
     })
-    await import('../api/contract').then(async ({ rejectContractByAdmin }) => {
-      await rejectContractByAdmin(id, { reason: value })
-      ElMessage.success('合同已被拒绝')
-      fetchContracts()
-    })
+    await rejectContractByAdmin(id, { reason: value })
+    ElMessage.success('合同已被拒绝')
+    fetchContracts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data || '操作失败')
+    }
+  }
+}
+
+const decideForceTerminationByAdmin = async (row, approve) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      approve ? '请输入管理员裁决说明' : '请输入驳回原因',
+      approve ? '通过强制终止' : '驳回强制终止',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPattern: /.+/,
+        inputErrorMessage: '请填写说明'
+      }
+    )
+    await respondTermination(row.terminationRequestId, { approve, comment: value })
+    ElMessage.success(approve ? '已提交管理员通过意见' : '已驳回强制终止')
+    fetchContracts()
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error(error.response?.data || '操作失败')
@@ -489,7 +526,9 @@ const getContractStatusType = (status) => {
     EXPIRED: 'info',
     TERMINATED: 'danger',
     TERMINATION_PENDING: 'warning',
+    TERMINATION_PENDING_COUNTERPARTY: 'warning',
     TERMINATION_PENDING_STAFF_REVIEW: 'warning',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: 'warning',
     PENDING_LANDLORD_APPROVAL: 'warning',
     PENDING_STAFF_SIGNING: 'warning',
     PENDING_ADMIN_APPROVAL: 'warning'
@@ -503,7 +542,9 @@ const getContractStatusText = (status) => {
     EXPIRED: '已到期',
     TERMINATED: '已终止',
     TERMINATION_PENDING: '待终止确认',
+    TERMINATION_PENDING_COUNTERPARTY: '待对方确认终止',
     TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: '强制终止待联合审核',
     PENDING_LANDLORD_APPROVAL: '待房主审批',
     PENDING_STAFF_SIGNING: '待业务员签约',
     PENDING_ADMIN_APPROVAL: '待管理员审批'

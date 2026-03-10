@@ -6,7 +6,7 @@
 
 ### 1.1 核心功能模块
 
-1. **用户与账户管理**：账户体系分为管理员(ADMIN)和普通用户(USER)两种类型，具有不同的操作权限。
+1. **用户与账户管理**：账户体系分为普通用户(USER)与操作员(OPERATOR)两类。操作员包含管理员(ADMIN)和业务员(STAFF)，并使用独立表 `operator_accounts`。
 2. **房源管理**：房东可以发布房源信息，包括标题、地址、户型、面积、价格等，支持房源搜索和状态管理。
 3. **合同管理**：支持租客与房东签署租房合同，提供正常和强制终止合同流程。
 4. **消息系统**：系统内建消息机制，用于通知用户各种操作和事件。
@@ -89,7 +89,9 @@ com.renthouse
 - ACTIVE(进行中)
 - EXPIRED(已到期)
 - TERMINATED(已终止)
-- TERMINATION_PENDING(待终止确认)
+- TERMINATION_PENDING_COUNTERPARTY(待对方确认终止)
+- TERMINATION_PENDING_STAFF_REVIEW(待业务员终止审核)
+- TERMINATION_FORCE_PENDING_JOINT_REVIEW(强制终止待联合审核)
 
 #### TerminationRequest（终止申请）
 - 合同终止申请记录
@@ -227,7 +229,8 @@ users(sender) (N:N) messages (N:1) users(receiver)
 ### 8.4 强制终止流程
 
 ```
-用户选择强制终止 → 填写强制终止原因 → 提交 → 系统验证 → 直接终止合同 → 通知对方用户和管理员 → 更新用户权限
+普通终止被拒累计>=3次 → 发起强制终止(必填原因+证据) → 状态进入TERMINATION_FORCE_PENDING_JOINT_REVIEW
+→ 业务员审核并填写后续方案 → 管理员审核并填写裁决 → 双方同意后终止合同并释放房源
 ```
 
 ## 9. 安全设计
@@ -262,7 +265,7 @@ users(sender) (N:N) messages (N:1) users(receiver)
 关键配置项：
 ```properties
 # 数据库连接配置
-spring.datasource.url=jdbc:mysql://localhost:3306/rent_house_db
+spring.datasource.url=jdbc:mysql://localhost:3306/easy_rent
 spring.datasource.username=root
 spring.datasource.password=123456
 
@@ -272,9 +275,9 @@ jwt.secret=mySecretKey
 
 ### 10.3 初始化脚本
 
-系统启动时会自动执行以下脚本：
+系统启动时会自动执行：
 - [schema-v3.sql](../src/main/resources/schema-v3.sql) - 数据库表结构
-- [init-data-placeholder.sql](../src/main/resources/init-data-placeholder.sql) - 初始数据
+- [DataInitializer](../src/main/java/com/renthouse/config/DataInitializer.java) - 默认管理员初始化
 
 ## 11. 开发规范
 

@@ -70,6 +70,14 @@ export function respondTermination(requestId, data) {
   })
 }
 
+export function respondTerminationByCounterparty(requestId, data) {
+  return request({
+    url: `/api/contracts/termination/${requestId}/counterparty-decision`,
+    method: 'put',
+    data
+  })
+}
+
 export function adminTerminateContract(id) {
   return request({
     url: `/api/contracts/${id}/admin/terminate`,

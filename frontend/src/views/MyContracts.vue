@@ -59,7 +59,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <div class="action-cell">
               <el-button
@@ -89,7 +89,26 @@
               >
                 终止
               </el-button>
-              <el-tag v-else-if="row.status === 'TERMINATION_PENDING' || row.status === 'TERMINATION_PENDING_STAFF_REVIEW'" type="warning">审核中</el-tag>
+              <div
+                v-else-if="!isStaff && row.status === 'TERMINATION_PENDING_COUNTERPARTY' && row.terminationResponderId === currentUserId"
+                class="action-cell"
+              >
+                <el-button size="small" type="success" class="full-btn" @click="counterpartyDecision(row, true)">
+                  同意终止
+                </el-button>
+                <el-button size="small" type="danger" class="full-btn" @click="counterpartyDecision(row, false)">
+                  拒绝终止
+                </el-button>
+              </div>
+              <el-tag
+                v-else-if="row.status === 'TERMINATION_PENDING' || row.status === 'TERMINATION_PENDING_STAFF_REVIEW'"
+                type="warning"
+              >
+                审核中
+              </el-tag>
+              <el-tag v-else-if="row.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW'" type="warning">
+                强制终止联合审核中
+              </el-tag>
               <div class="link-row">
                 <el-button v-if="!isStaff" size="small" text type="primary" class="link-btn" @click="quickChat('user', row)">
                   联系对方
@@ -112,10 +131,21 @@
           <el-input v-model="terminateDialog.form.reason" placeholder="请输入终止原因" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="强制终止">
-          <el-switch v-model="terminateDialog.form.force" />
+          <el-switch v-model="terminateDialog.form.force" :disabled="!canApplyForceTerminate(terminateDialog.contractRow)" />
+          <div v-if="terminateDialog.contractRow" class="staff-tip">
+            当前普通终止被拒次数：{{ getMyRejectCount(terminateDialog.contractRow) }}（达到 3 次可申请强制终止）
+          </div>
         </el-form-item>
         <el-form-item label="说明" v-if="terminateDialog.form.force">
           <el-input v-model="terminateDialog.form.forceReason" placeholder="请输入强制终止说明" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="证据附件" v-if="terminateDialog.form.force">
+          <el-input
+            v-model="terminateDialog.form.evidenceUrls"
+            placeholder="请输入证据附件URL或说明（可多条，逗号分隔）"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -153,6 +183,7 @@ import {
   getMyStaffContracts,
   uploadSignedContract,
   terminateContract,
+  respondTerminationByCounterparty,
   approveContractByLandlord,
   approveContractByLandlordWithStaff,
   getAvailableStaffOptions
@@ -180,11 +211,13 @@ if (userType === 'ADMIN') {
 const terminateDialog = reactive({
   visible: false,
   contractId: null,
+  contractRow: null,
   loading: false,
   form: {
     reason: '',
     force: false,
-    forceReason: ''
+    forceReason: '',
+    evidenceUrls: ''
   }
 })
 
@@ -223,7 +256,9 @@ const getStatusType = (status) => {
     EXPIRED: 'info',
     TERMINATED: 'danger',
     TERMINATION_PENDING: 'warning',
+    TERMINATION_PENDING_COUNTERPARTY: 'warning',
     TERMINATION_PENDING_STAFF_REVIEW: 'warning',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: 'warning',
     PENDING_LANDLORD_APPROVAL: 'warning',
     PENDING_STAFF_SIGNING: 'warning',
     PENDING_ADMIN_APPROVAL: 'warning'
@@ -237,7 +272,9 @@ const getStatusText = (status) => {
     EXPIRED: '已到期',
     TERMINATED: '已终止',
     TERMINATION_PENDING: '待终止确认',
+    TERMINATION_PENDING_COUNTERPARTY: '待对方确认终止',
     TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: '强制终止待联合审核',
     PENDING_LANDLORD_APPROVAL: '待房主审批',
     PENDING_STAFF_SIGNING: '待业务员签约',
     PENDING_ADMIN_APPROVAL: '待管理员审批'
@@ -273,9 +310,11 @@ const fetchContracts = async () => {
 const openTerminate = (row) => {
   terminateDialog.visible = true
   terminateDialog.contractId = row.id
+  terminateDialog.contractRow = row
   terminateDialog.form.reason = ''
   terminateDialog.form.force = false
   terminateDialog.form.forceReason = ''
+  terminateDialog.form.evidenceUrls = ''
 }
 
 const submitTerminate = async () => {
@@ -287,20 +326,49 @@ const submitTerminate = async () => {
     ElMessage.warning('请填写强制终止说明')
     return
   }
+  if (terminateDialog.form.force && !terminateDialog.form.evidenceUrls) {
+    ElMessage.warning('请填写证据附件（URL 或文件说明）')
+    return
+  }
   try {
     terminateDialog.loading = true
     await terminateContract(terminateDialog.contractId, {
       reason: terminateDialog.form.reason,
       force: terminateDialog.form.force,
-      forceReason: terminateDialog.form.forceReason
+      forceReason: terminateDialog.form.forceReason,
+      evidenceUrls: terminateDialog.form.evidenceUrls
     })
-    ElMessage.success(terminateDialog.form.force ? '已强制终止合同' : '终止申请已发送')
+    ElMessage.success(terminateDialog.form.force ? '强制终止申请已提交' : '终止申请已发送')
     terminateDialog.visible = false
     fetchContracts()
   } catch (error) {
     ElMessage.error(error.response?.data || '操作失败')
   } finally {
     terminateDialog.loading = false
+  }
+}
+
+const getMyRejectCount = (row) => {
+  if (!row) return 0
+  if (row.landlordId === currentUserId) return row.landlordTerminationRejectCount || 0
+  if (row.tenantId === currentUserId) return row.tenantTerminationRejectCount || 0
+  return 0
+}
+
+const canApplyForceTerminate = (row) => getMyRejectCount(row) >= 3
+
+const counterpartyDecision = async (row, approve) => {
+  if (!row?.terminationRequestId) {
+    ElMessage.warning('终止申请记录不存在')
+    return
+  }
+  const comment = approve ? '同意终止' : '不同意终止'
+  try {
+    await respondTerminationByCounterparty(row.terminationRequestId, { approve, comment })
+    ElMessage.success(approve ? '已同意终止，进入业务员审核' : '已拒绝终止')
+    fetchContracts()
+  } catch (error) {
+    ElMessage.error(error.response?.data || '操作失败')
   }
 }
 

@@ -62,7 +62,7 @@
                 上传签约合同
               </el-button>
               <el-button
-                v-if="row.status === 'TERMINATION_PENDING_STAFF_REVIEW' && row.terminationRequestId"
+                v-if="(row.status === 'TERMINATION_PENDING_STAFF_REVIEW' || row.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW') && row.terminationRequestId"
                 type="success"
                 size="small"
                 class="full-btn"
@@ -71,7 +71,7 @@
                 同意终止
               </el-button>
               <el-button
-                v-if="row.status === 'TERMINATION_PENDING_STAFF_REVIEW' && row.terminationRequestId"
+                v-if="(row.status === 'TERMINATION_PENDING_STAFF_REVIEW' || row.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW') && row.terminationRequestId"
                 type="danger"
                 size="small"
                 class="full-btn"
@@ -123,7 +123,7 @@ const myContracts = ref([])
 const statItems = computed(() => [
   { title: '房源待办', value: pendingHouses.value.length },
   { title: '合同待办', value: myContracts.value.length },
-  { title: '终止待审', value: myContracts.value.filter(c => c.status === 'TERMINATION_PENDING_STAFF_REVIEW').length }
+  { title: '终止待审', value: myContracts.value.filter(c => c.status === 'TERMINATION_PENDING_STAFF_REVIEW' || c.status === 'TERMINATION_FORCE_PENDING_JOINT_REVIEW').length }
 ])
 
 const statusText = (status) => {
@@ -131,6 +131,7 @@ const statusText = (status) => {
     PENDING_STAFF_SIGNING: '待业务员签约',
     PENDING_ADMIN_APPROVAL: '待管理员审核',
     TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: '强制终止待联合审核',
     ACTIVE: '进行中',
     TERMINATED: '已终止'
   }
@@ -142,6 +143,7 @@ const statusType = (status) => {
     PENDING_STAFF_SIGNING: 'warning',
     PENDING_ADMIN_APPROVAL: 'warning',
     TERMINATION_PENDING_STAFF_REVIEW: 'warning',
+    TERMINATION_FORCE_PENDING_JOINT_REVIEW: 'warning',
     ACTIVE: 'success',
     TERMINATED: 'danger'
   }
@@ -211,11 +213,24 @@ const uploadContract = async (contractId) => {
 
 const decideTermination = async (requestId, approve) => {
   try {
-    await respondTermination(requestId, { approve, comment: approve ? '同意终止' : '不同意终止' })
+    const { value } = await ElMessageBox.prompt(
+      approve ? '请输入处理说明（强制终止时将作为后续方案）' : '请输入驳回原因',
+      approve ? '同意终止' : '驳回终止',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPattern: /.+/,
+        inputErrorMessage: '请填写说明'
+      }
+    )
+    await respondTermination(requestId, { approve, comment: value })
     ElMessage.success(approve ? '已同意终止' : '已驳回终止')
     loadData()
   } catch (error) {
-    ElMessage.error(error.response?.data || '操作失败')
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data || '操作失败')
+    }
   }
 }
 

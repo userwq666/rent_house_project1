@@ -1,6 +1,6 @@
 # 租房管理系统
 
-一个基于 **Spring Boot + Vue 3** 的前后端分离租房管理系统，支持用户注册登录、房源发布与浏览、合同管理、消息通知和管理员后台管理。
+一个基于 **Spring Boot + Vue 3** 的前后端分离租房管理系统，支持用户注册登录、房源发布与浏览、合同管理、消息通知、业务员后台和管理员后台。
 
 ## 项目简介
 
@@ -79,6 +79,7 @@ rent_house_project1
 - 房源管理
 - 合同管理
 - 权限控制
+- 业务员账号管理（新增/停用）
 
 ## 运行环境
 
@@ -103,10 +104,18 @@ cd rent_house_project1
 根据本地 MySQL 环境修改：
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/rent_house_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+spring.datasource.url=jdbc:mysql://localhost:3306/easy_rent?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
 spring.datasource.username=root
 spring.datasource.password=你的数据库密码
 ```
+
+首次初始化推荐先执行：
+
+```bash
+mysql -u root -p < src/main/resources/init-database.sql
+```
+
+然后启动后端，应用会自动执行 `schema-v3.sql` 建表，并初始化默认管理员。
 
 ### 3. 启动后端
 ```bash
@@ -160,7 +169,9 @@ http://localhost:5173
 ### 合同接口
 - `POST /api/contracts` 创建合同
 - `GET /api/contracts/my` 获取我的合同
-- `PUT /api/contracts/{id}/terminate` 终止合同
+- `PUT /api/contracts/{id}/terminate` 发起终止（普通/强制）
+- `PUT /api/contracts/termination/{requestId}/counterparty-decision` 对方同意/拒绝普通终止
+- `PUT /api/contracts/termination/{requestId}/decision` 业务员/管理员终止审核（强制终止为联合审核）
 - `PUT /api/contracts/{id}/landlord/approve` 房东审批
 - `PUT /api/contracts/{id}/admin/approve` 管理员审批
 
@@ -176,6 +187,7 @@ http://localhost:5173
 
 - `accounts` 账号表
 - `users` 用户信息表
+- `operator_accounts` 管理员/业务员账号表
 - `houses` 房源表
 - `contracts` 合同表
 - `termination_requests` 合同终止申请表

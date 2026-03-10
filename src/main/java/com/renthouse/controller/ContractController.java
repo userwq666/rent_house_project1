@@ -5,6 +5,7 @@ import com.renthouse.dto.CreateContractRequest;
 import com.renthouse.dto.LandlordApproveRequest;
 import com.renthouse.dto.StaffOptionResponse;
 import com.renthouse.dto.TerminateContractRequest;
+import com.renthouse.dto.TerminationCounterpartyDecisionRequest;
 import com.renthouse.dto.TerminationDecisionRequest;
 import com.renthouse.service.ContractService;
 import com.renthouse.service.OperatorAccountService;
@@ -120,6 +121,20 @@ public class ContractController {
             return ResponseEntity.ok(Boolean.TRUE.equals(requestBody.getApprove())
                     ? "已同意终止合同"
                     : "已驳回终止合同");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("操作失败: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/termination/{requestId}/counterparty-decision")
+    public ResponseEntity<?> decideByCounterparty(@PathVariable Long requestId,
+                                                  @RequestBody TerminationCounterpartyDecisionRequest requestBody) {
+        try {
+            Long userId = AuthUtil.getCurrentUserId();
+            contractService.decideByCounterparty(requestId, userId, requestBody);
+            return ResponseEntity.ok(Boolean.TRUE.equals(requestBody.getApprove())
+                    ? "已同意终止申请，等待业务员审核"
+                    : "已拒绝终止申请");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("操作失败: " + e.getMessage());
         }

@@ -45,6 +45,27 @@ public class TerminationRequest {
     @Column(name = "force_reason", columnDefinition = "TEXT")
     private String forceReason;
 
+    @Column(name = "force_request")
+    private Boolean forceRequest = false;
+
+    @Column(name = "evidence_urls", columnDefinition = "TEXT")
+    private String evidenceUrls;
+
+    @Column(name = "counterparty_comment", columnDefinition = "TEXT")
+    private String counterpartyComment;
+
+    @Column(name = "staff_approved")
+    private Boolean staffApproved = false;
+
+    @Column(name = "admin_approved")
+    private Boolean adminApproved = false;
+
+    @Column(name = "staff_follow_up_plan", columnDefinition = "TEXT")
+    private String staffFollowUpPlan;
+
+    @Column(name = "admin_decision_comment", columnDefinition = "TEXT")
+    private String adminDecisionComment;
+
     @Column(name = "admin_notified")
     private Boolean adminNotified = false;
 

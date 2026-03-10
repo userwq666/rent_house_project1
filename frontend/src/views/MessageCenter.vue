@@ -153,7 +153,8 @@ import MessageActionCard from '../components/MessageActionCard.vue'
 const route = useRoute()
 const router = useRouter()
 const principalType = sessionStorage.getItem('principalType') || 'USER'
-const isOperator = principalType === 'OPERATOR'
+const userType = sessionStorage.getItem('userType') || 'USER'
+const isOperator = principalType === 'OPERATOR' || userType === 'ADMIN' || userType === 'STAFF'
 const currentPrincipalId = Number(sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') || '0')
 const contacts = ref([])
 const chatMessages = ref([])
@@ -330,15 +331,8 @@ const getContactMode = (contact) => {
   const contactId = getContactId(contact)
   if (!contactId) return null
   if (contactId === -1) return 'SYSTEM'
-  if (isOperator) {
-    const isOperatorTarget =
-      (contact.senderOperatorId && contact.senderId === contactId) ||
-      (contact.receiverOperatorId && contact.receiverId === contactId)
-    return isOperatorTarget ? 'OPERATOR' : 'USER'
-  }
   const isOperatorTarget =
-    (contact.senderOperatorId && contact.senderId === contactId) ||
-    (contact.receiverOperatorId && contact.receiverId === contactId)
+    contact.senderOperatorId === contactId || contact.receiverOperatorId === contactId
   return isOperatorTarget ? 'OPERATOR' : 'USER'
 }
 
