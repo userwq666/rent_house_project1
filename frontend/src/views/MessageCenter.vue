@@ -21,7 +21,7 @@
         <el-scrollbar class="contact-scroll">
           <div
             v-for="contact in contacts"
-            :key="contact.senderId + '-' + contact.receiverId"
+            :key="contact.id"
             class="contact-item-wrapper"
           >
             <div class="contact-item-container">
@@ -43,6 +43,7 @@
                 </div>
               </div>
               <el-button
+                v-if="!isOperator"
                 class="delete-btn"
                 type="danger"
                 size="small"
@@ -144,15 +145,18 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatLineSquare, Plus } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import { getMessageContacts, getChatMessages, sendMessage as sendApiMessage, updateMessageStatus, archiveContactMessages } from '../api/messages'
 import { getUserInfo } from '../api/auth'
 import MessageActionCard from '../components/MessageActionCard.vue'
-const isOperator = sessionStorage.getItem('principalType') === 'OPERATOR'
 
 const route = useRoute()
+const router = useRouter()
+const principalType = sessionStorage.getItem('principalType') || 'USER'
+const isOperator = principalType === 'OPERATOR'
+const currentPrincipalId = Number(sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') || '0')
 const contacts = ref([])
 const chatMessages = ref([])
 const currentContact = ref(null)
@@ -215,8 +219,8 @@ const loadContacts = async () => {
 const markContactMessagesAsRead = async (contactId) => {
   try {
     const contactIndex = contacts.value.findIndex(contact =>
-      (contact.senderId === contactId && contact.receiverId === Number(sessionStorage.getItem('userId'))) ||
-      (contact.receiverId === contactId && contact.senderId === Number(sessionStorage.getItem('userId')))
+      (contact.senderId === contactId && contact.receiverId === currentPrincipalId) ||
+      (contact.receiverId === contactId && contact.senderId === currentPrincipalId)
     )
 
     if (contactIndex !== -1 && contacts.value[contactIndex].unreadCount > 0) {
@@ -268,7 +272,7 @@ const loadChatMessages = async (contact) => {
 
 // 获取联系人 ID（对方的用户 ID）
 const getContactId = (contact) => {
-  const currentUserId = Number(sessionStorage.getItem('userId'))
+  const currentUserId = currentPrincipalId
   if (!contact) return null
 
   console.log('getContactId - contact:', contact)
@@ -311,7 +315,7 @@ const getContactId = (contact) => {
 
 // 获取联系人名称
 const getContactName = (contact) => {
-  const currentUserId = Number(sessionStorage.getItem('userId'))
+  const currentUserId = currentPrincipalId
   if (contact.senderId === currentUserId) {
     return contact.receiverName || '未知用户'
   }
@@ -320,7 +324,7 @@ const getContactName = (contact) => {
 
 // 是否是自己发送的消息
 const isSentMessage = (message) => {
-  const currentUserId = Number(sessionStorage.getItem('userId'))
+  const currentUserId = currentPrincipalId
   return message.senderId === currentUserId
 }
 
@@ -338,6 +342,10 @@ const handleMessageAction = async ({ messageId, action }) => {
 
 // 删除联系人（归档消息，数据库保留记录）
 const deleteContact = async (contact) => {
+  if (isOperator) {
+    ElMessage.warning('业务员账号暂不支持删除待办消息')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `确定要删除与 ${getContactName(contact)} 的聊天记录吗？删除后消息将被归档隐藏，但数据库仍会保留以便后期核验。`,
@@ -523,6 +531,7 @@ const handleUnreadCountChange = () => {
 
 // 处理路由参数中的 receiverId（用于"联系房主"功能）
 const handleReceiverIdParam = async () => {
+  if (isOperator) return
   const receiverId = route.query.receiverId
   if (receiverId) {
     // 等待联系人加载完成
@@ -559,7 +568,8 @@ const handleReceiverIdParam = async () => {
     }
 
     // 清除 URL 参数，避免刷新后重复处理
-    route.query.receiverId = undefined
+    const { receiverId: _, ...restQuery } = route.query
+    await router.replace({ path: route.path, query: restQuery })
   }
 }
 
@@ -992,4 +1002,3 @@ onUnmounted(() => {
   }
 }
 </style>
-me

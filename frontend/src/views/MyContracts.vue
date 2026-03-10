@@ -67,7 +67,7 @@
                 size="small"
                 type="primary"
                 class="full-btn"
-                @click="approveByLandlord(row.id)"
+                @click="openApproveDialog(row.id)"
               >
                 同意合同
               </el-button>
@@ -123,6 +123,22 @@
         <el-button type="primary" class="glow" :loading="terminateDialog.loading" @click="submitTerminate">提交</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="staffAssignDialog.visible" title="指定签约业务员" width="420px">
+      <div class="staff-tip">可手动指定业务员，不选择则系统随机分配。</div>
+      <el-select v-model="staffAssignDialog.selectedStaffId" clearable style="width: 100%" placeholder="不指定（随机分配）">
+        <el-option
+          v-for="item in staffAssignDialog.options"
+          :key="item.id"
+          :label="formatStaffOption(item)"
+          :value="item.id"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="staffAssignDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="staffAssignDialog.loading" @click="submitApproveByLandlord">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -137,7 +153,9 @@ import {
   getMyStaffContracts,
   uploadSignedContract,
   terminateContract,
-  approveContractByLandlord
+  approveContractByLandlord,
+  approveContractByLandlordWithStaff,
+  getAvailableStaffOptions
 } from '../api/contract'
 
 const router = useRouter()
@@ -168,6 +186,14 @@ const terminateDialog = reactive({
     force: false,
     forceReason: ''
   }
+})
+
+const staffAssignDialog = reactive({
+  visible: false,
+  contractId: null,
+  selectedStaffId: null,
+  loading: false,
+  options: []
 })
 
 const currentContracts = computed(() => {
@@ -278,13 +304,45 @@ const submitTerminate = async () => {
   }
 }
 
-const approveByLandlord = async (id) => {
+const formatStaffOption = (staff) => {
+  const name = staff.displayName || `业务员#${staff.id}`
+  return staff.phone ? `${name}（${staff.phone}）` : name
+}
+
+const openApproveDialog = async (contractId) => {
   try {
-    await approveContractByLandlord(id)
-    ElMessage.success('已进入业务员签约流程')
+    staffAssignDialog.loading = true
+    const { data } = await getAvailableStaffOptions()
+    staffAssignDialog.options = data || []
+    staffAssignDialog.contractId = contractId
+    staffAssignDialog.selectedStaffId = null
+    staffAssignDialog.visible = true
+  } catch (error) {
+    ElMessage.error(error.response?.data || '获取业务员列表失败')
+  } finally {
+    staffAssignDialog.loading = false
+  }
+}
+
+const submitApproveByLandlord = async () => {
+  if (!staffAssignDialog.contractId) {
+    return
+  }
+  try {
+    staffAssignDialog.loading = true
+    if (staffAssignDialog.selectedStaffId) {
+      await approveContractByLandlordWithStaff(staffAssignDialog.contractId, staffAssignDialog.selectedStaffId)
+      ElMessage.success('已指定业务员并进入签约流程')
+    } else {
+      await approveContractByLandlord(staffAssignDialog.contractId)
+      ElMessage.success('已随机分配业务员并进入签约流程')
+    }
+    staffAssignDialog.visible = false
     fetchContracts()
   } catch (error) {
     ElMessage.error(error.response?.data || '操作失败')
+  } finally {
+    staffAssignDialog.loading = false
   }
 }
 
@@ -406,6 +464,12 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
+}
+
+.staff-tip {
+  margin-bottom: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 
 .full-btn {

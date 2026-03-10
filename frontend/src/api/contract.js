@@ -84,6 +84,13 @@ export function approveContractByLandlord(id) {
   })
 }
 
+export function getAvailableStaffOptions() {
+  return request({
+    url: '/api/contracts/staff/options',
+    method: 'get'
+  })
+}
+
 export function approveContractByLandlordWithStaff(id, staffId) {
   return request({
     url: `/api/contracts/${id}/landlord/approve`,

@@ -15,8 +15,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -260,12 +262,10 @@ public class MessageService {
         return getOperatorMessages(operatorId);
     }
 
-    public void markAsRead(Long messageId, Long userId) {
+    public void markAsRead(Long messageId, Long userId, Long operatorId) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new RuntimeException("消息不存在"));
-        boolean userMatched = message.getReceiver() != null && message.getReceiver().getId().equals(userId);
-        boolean operatorMatched = message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(userId);
-        if (!userMatched && !operatorMatched) {
+        if (!canOperateMessage(message, userId, operatorId)) {
             throw new RuntimeException("无权操作该消息");
         }
         message.setStatus(MessageStatus.READ);
@@ -273,12 +273,10 @@ public class MessageService {
         messageRepository.save(message);
     }
 
-    public void updateMessageStatus(Long messageId, Long userId, MessageStatus status) {
+    public void updateMessageStatus(Long messageId, Long userId, Long operatorId, MessageStatus status) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new RuntimeException("消息不存在"));
-        boolean userMatched = message.getReceiver() != null && message.getReceiver().getId().equals(userId);
-        boolean operatorMatched = message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(userId);
-        if (!userMatched && !operatorMatched) {
+        if (!canOperateMessage(message, userId, operatorId)) {
             throw new RuntimeException("无权操作该消息");
         }
         message.setStatus(status);
@@ -327,17 +325,38 @@ public class MessageService {
     }
 
     private void addArchivedUserId(Message message, Long userId) {
-        String archivedIds = message.getArchivedByUserIds();
-        if (archivedIds == null || archivedIds.isEmpty()) {
-            message.setArchivedByUserIds(userId.toString());
-        } else if (!archivedIds.contains(userId.toString())) {
-            message.setArchivedByUserIds(archivedIds + "," + userId);
-        }
+        Set<String> archivedIds = parseArchivedIds(message.getArchivedByUserIds());
+        archivedIds.add(userId.toString());
+        message.setArchivedByUserIds(String.join(",", archivedIds));
     }
 
     private boolean isArchivedForUser(Message message, Long userId) {
-        String archivedIds = message.getArchivedByUserIds();
-        return archivedIds != null && archivedIds.contains(userId.toString());
+        Set<String> archivedIds = parseArchivedIds(message.getArchivedByUserIds());
+        return archivedIds.contains(userId.toString());
+    }
+
+    private Set<String> parseArchivedIds(String archivedByUserIds) {
+        Set<String> ids = new LinkedHashSet<>();
+        if (archivedByUserIds == null || archivedByUserIds.isBlank()) {
+            return ids;
+        }
+        for (String part : archivedByUserIds.split(",")) {
+            String id = part.trim();
+            if (!id.isEmpty()) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    private boolean canOperateMessage(Message message, Long userId, Long operatorId) {
+        if (userId == null && operatorId == null) {
+            throw new RuntimeException("未识别当前账号");
+        }
+        if (userId != null) {
+            return message.getReceiver() != null && message.getReceiver().getId().equals(userId);
+        }
+        return message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(operatorId);
     }
 
     private MessageDTO convert(Message message) {

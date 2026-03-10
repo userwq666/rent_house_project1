@@ -21,16 +21,32 @@ public class MessageController {
 
     private static final Long SYSTEM_ID = -1L;
 
+    private PrincipalContext resolvePrincipal() {
+        try {
+            return new PrincipalContext(AuthUtil.getCurrentUserId(), null);
+        } catch (Exception ignored) {
+            return new PrincipalContext(null, AuthUtil.getCurrentOperatorId());
+        }
+    }
+
+    private static class PrincipalContext {
+        private final Long userId;
+        private final Long operatorId;
+
+        private PrincipalContext(Long userId, Long operatorId) {
+            this.userId = userId;
+            this.operatorId = operatorId;
+        }
+    }
+
     @GetMapping
     public ResponseEntity<?> getMyMessages() {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                return ResponseEntity.ok(messageService.getMessages(userId));
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                return ResponseEntity.ok(messageService.getOperatorMessages(operatorId));
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId != null) {
+                return ResponseEntity.ok(messageService.getMessages(principal.userId));
             }
+            return ResponseEntity.ok(messageService.getOperatorMessages(principal.operatorId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -39,13 +55,11 @@ public class MessageController {
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadMessageCount() {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                return ResponseEntity.ok(messageService.getUnreadMessageCount(userId));
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                return ResponseEntity.ok(messageService.getOperatorUnreadMessageCount(operatorId));
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId != null) {
+                return ResponseEntity.ok(messageService.getUnreadMessageCount(principal.userId));
             }
+            return ResponseEntity.ok(messageService.getOperatorUnreadMessageCount(principal.operatorId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -54,13 +68,11 @@ public class MessageController {
     @GetMapping("/contacts")
     public ResponseEntity<?> getMessageContacts() {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                return ResponseEntity.ok(messageService.getMessageContacts(userId));
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                return ResponseEntity.ok(messageService.getOperatorMessageContacts(operatorId));
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId != null) {
+                return ResponseEntity.ok(messageService.getMessageContacts(principal.userId));
             }
+            return ResponseEntity.ok(messageService.getOperatorMessageContacts(principal.operatorId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -69,13 +81,11 @@ public class MessageController {
     @GetMapping("/chat/{contactId}")
     public ResponseEntity<?> getChatMessages(@PathVariable Long contactId) {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                return ResponseEntity.ok(messageService.getChatMessages(userId, contactId));
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                return ResponseEntity.ok(messageService.getOperatorChatMessages(operatorId, contactId));
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId != null) {
+                return ResponseEntity.ok(messageService.getChatMessages(principal.userId, contactId));
             }
+            return ResponseEntity.ok(messageService.getOperatorChatMessages(principal.operatorId, contactId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -84,13 +94,8 @@ public class MessageController {
     @PostMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@PathVariable Long id) {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                messageService.markAsRead(id, userId);
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                messageService.markAsRead(id, operatorId);
-            }
+            PrincipalContext principal = resolvePrincipal();
+            messageService.markAsRead(id, principal.userId, principal.operatorId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -101,14 +106,12 @@ public class MessageController {
     public ResponseEntity<?> updateMessageStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         try {
             String statusStr = payload.get("status");
-            MessageStatus status = MessageStatus.valueOf(statusStr);
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                messageService.updateMessageStatus(id, userId, status);
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                messageService.updateMessageStatus(id, operatorId, status);
+            if (statusStr == null || statusStr.isBlank()) {
+                return ResponseEntity.badRequest().body("状态不能为空");
             }
+            MessageStatus status = MessageStatus.valueOf(statusStr);
+            PrincipalContext principal = resolvePrincipal();
+            messageService.updateMessageStatus(id, principal.userId, principal.operatorId, status);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -118,12 +121,11 @@ public class MessageController {
     @PostMapping("/read-all")
     public ResponseEntity<?> markAllAsRead() {
         try {
-            try {
-                Long userId = AuthUtil.getCurrentUserId();
-                messageService.markAllAsRead(userId);
-            } catch (Exception ignored) {
-                Long operatorId = AuthUtil.getCurrentOperatorId();
-                messageService.markAllOperatorMessagesAsRead(operatorId);
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId != null) {
+                messageService.markAllAsRead(principal.userId);
+            } else {
+                messageService.markAllOperatorMessagesAsRead(principal.operatorId);
             }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -134,18 +136,21 @@ public class MessageController {
     @PostMapping
     public ResponseEntity<?> sendMessage(@RequestBody SendMessageRequest request) {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
+            PrincipalContext principal = resolvePrincipal();
+            if (principal.userId == null) {
+                return ResponseEntity.badRequest().body("当前账号不支持主动聊天，仅普通用户可发起私聊");
+            }
             if (SYSTEM_ID.equals(request.getReceiverId())) {
                 return ResponseEntity.badRequest().body("不能向系统发送消息");
             }
             if (request.getReceiverId() == null) {
                 return ResponseEntity.badRequest().body("接收方不能为空");
             }
-            messageService.sendMessage(userId, request.getReceiverId(), request.getTitle(), request.getContent(),
+            messageService.sendMessage(principal.userId, request.getReceiverId(), request.getTitle(), request.getContent(),
                     MessageType.USER_CHAT, null, null, false);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("当前账号不支持主动聊天，仅可查看待办消息");
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 

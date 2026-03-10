@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/houses/available").permitAll()
                 .requestMatchers("/api/houses/search").permitAll()
+                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                 .requestMatchers("/api/houses/my").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/houses/*").permitAll()
                 .anyRequest().authenticated()

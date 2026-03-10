@@ -3,9 +3,11 @@ package com.renthouse.controller;
 import com.renthouse.dto.ContractDTO;
 import com.renthouse.dto.CreateContractRequest;
 import com.renthouse.dto.LandlordApproveRequest;
+import com.renthouse.dto.StaffOptionResponse;
 import com.renthouse.dto.TerminateContractRequest;
 import com.renthouse.dto.TerminationDecisionRequest;
 import com.renthouse.service.ContractService;
+import com.renthouse.service.OperatorAccountService;
 import com.renthouse.util.AuthUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,9 @@ public class ContractController {
 
     @Autowired
     private ContractService contractService;
+
+    @Autowired
+    private OperatorAccountService operatorAccountService;
 
     @PostMapping
     public ResponseEntity<?> createContract(@RequestBody CreateContractRequest request) {
@@ -117,6 +122,19 @@ public class ContractController {
                     : "已驳回终止合同");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("操作失败: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/staff/options")
+    public ResponseEntity<?> getStaffOptionsForLandlord() {
+        try {
+            AuthUtil.getCurrentUserId();
+            List<StaffOptionResponse> options = operatorAccountService.getEnabledStaffList().stream()
+                    .map(staff -> new StaffOptionResponse(staff.getId(), staff.getDisplayName(), staff.getPhone()))
+                    .toList();
+            return ResponseEntity.ok(options);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("获取业务员列表失败: " + e.getMessage());
         }
     }
 
