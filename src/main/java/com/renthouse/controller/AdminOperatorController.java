@@ -1,9 +1,10 @@
 package com.renthouse.controller;
 
-import com.renthouse.domain.OperatorAccount;
+import com.renthouse.domain.Account;
 import com.renthouse.dto.CreateStaffRequest;
 import com.renthouse.dto.OperatorAccountResponse;
 import com.renthouse.dto.UpdateOperatorStatusRequest;
+import com.renthouse.enums.AccountType;
 import com.renthouse.enums.OperatorRole;
 import com.renthouse.service.OperatorAccountService;
 import com.renthouse.util.AuthUtil;
@@ -31,7 +32,7 @@ public class AdminOperatorController {
     @PostMapping("/staff")
     public ResponseEntity<?> createStaff(@RequestBody CreateStaffRequest request) {
         verifyAdmin();
-        OperatorAccount created = operatorAccountService.createStaff(
+        Account created = operatorAccountService.createStaff(
                 request.getUsername(),
                 request.getPassword(),
                 request.getDisplayName(),
@@ -43,25 +44,25 @@ public class AdminOperatorController {
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStaffStatus(@PathVariable Long id, @RequestBody UpdateOperatorStatusRequest request) {
         verifyAdmin();
-        OperatorAccount updated = operatorAccountService.updateEnabled(id, request.getEnabled());
+        Account updated = operatorAccountService.updateEnabled(id, request.getEnabled());
         return ResponseEntity.ok(convert(updated));
     }
 
     private void verifyAdmin() {
         Long operatorId = AuthUtil.getCurrentOperatorId();
-        OperatorAccount operator = operatorAccountService.requireAdmin(operatorId);
-        if (operator.getRole() != OperatorRole.ADMIN) {
+        Account operator = operatorAccountService.requireAdmin(operatorId);
+        if (operator.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
     }
 
-    private OperatorAccountResponse convert(OperatorAccount account) {
+    private OperatorAccountResponse convert(Account account) {
         OperatorAccountResponse resp = new OperatorAccountResponse();
         resp.setId(account.getId());
         resp.setUsername(account.getUsername());
         resp.setDisplayName(account.getDisplayName());
         resp.setPhone(account.getPhone());
-        resp.setRole(account.getRole());
+        resp.setRole(OperatorRole.valueOf(account.getAccountType().name()));
         resp.setEnabled(account.getEnabled());
         resp.setCreatedAt(account.getCreatedAt());
         return resp;

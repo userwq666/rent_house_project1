@@ -5,6 +5,7 @@ import com.renthouse.enums.AccountType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,10 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     boolean existsByUsername(String username);
     
     List<Account> findByAccountType(AccountType accountType);
+
+    Optional<Account> findByUsernameAndAccountTypeIn(String username, Collection<AccountType> accountTypes);
+
+    List<Account> findByAccountTypeAndEnabled(AccountType accountType, Boolean enabled);
     
     List<Account> findByEnabled(Boolean enabled);
 }

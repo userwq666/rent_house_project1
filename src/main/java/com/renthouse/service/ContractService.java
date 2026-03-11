@@ -2,21 +2,21 @@ package com.renthouse.service;
 
 import com.renthouse.domain.Contract;
 import com.renthouse.domain.House;
-import com.renthouse.domain.OperatorAccount;
+import com.renthouse.domain.Account;
 import com.renthouse.domain.TerminationRequest;
 import com.renthouse.domain.User;
 import com.renthouse.dto.ContractDTO;
 import com.renthouse.dto.CreateContractRequest;
 import com.renthouse.dto.TerminateContractRequest;
 import com.renthouse.dto.TerminationDecisionRequest;
+import com.renthouse.enums.AccountType;
 import com.renthouse.enums.ContractStatus;
 import com.renthouse.enums.HouseStatus;
 import com.renthouse.enums.MessageType;
-import com.renthouse.enums.OperatorRole;
 import com.renthouse.enums.TerminationStatus;
+import com.renthouse.repository.AccountRepository;
 import com.renthouse.repository.ContractRepository;
 import com.renthouse.repository.HouseRepository;
-import com.renthouse.repository.OperatorAccountRepository;
 import com.renthouse.repository.TerminationRequestRepository;
 import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +49,7 @@ public class ContractService {
     private UserRepository userRepository;
 
     @Autowired
-    private OperatorAccountRepository operatorAccountRepository;
+    private AccountRepository accountRepository;
 
     @Autowired
     private OperatorAccountService operatorAccountService;
@@ -276,14 +276,14 @@ public class ContractService {
         TerminationRequest terminationRequest = terminationRequestRepository.findById(requestId)
                 .orElseThrow(() -> new RuntimeException("终止申请不存在"));
 
-        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+        Account operator = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("业务员不存在"));
 
-        if (operator.getRole() != OperatorRole.STAFF && operator.getRole() != OperatorRole.ADMIN) {
+        if (operator.getAccountType() != AccountType.STAFF && operator.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("无权操作该终止申请");
         }
 
-        if (operator.getRole() == OperatorRole.STAFF && !operatorId.equals(terminationRequest.getReviewStaffId())) {
+        if (operator.getAccountType() == AccountType.STAFF && !operatorId.equals(terminationRequest.getReviewStaffId())) {
             throw new RuntimeException("非当前分配业务员，无法审核");
         }
 
@@ -303,7 +303,7 @@ public class ContractService {
         if (contract.getStatus() != ContractStatus.TERMINATION_PENDING_STAFF_REVIEW) {
             throw new RuntimeException("当前不是业务员终止审核阶段");
         }
-        if (operator.getRole() != OperatorRole.STAFF) {
+        if (operator.getAccountType() != AccountType.STAFF) {
             throw new RuntimeException("普通终止仅业务员可审核");
         }
 
@@ -389,9 +389,9 @@ public class ContractService {
 
     @Transactional
     public void adminTerminate(Long contractId, Long operatorId) {
-        OperatorAccount account = operatorAccountRepository.findById(operatorId)
+        Account account = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("账号不存在"));
-        if (account.getRole() != OperatorRole.ADMIN) {
+        if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
         Contract contract = contractRepository.findById(contractId)
@@ -401,10 +401,10 @@ public class ContractService {
 
     @Transactional(readOnly = true)
     public List<ContractDTO> getAllContracts(Long operatorId) {
-        OperatorAccount account = operatorAccountRepository.findById(operatorId)
+        Account account = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("账号不存在"));
 
-        if (account.getRole() != OperatorRole.ADMIN) {
+        if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
 
@@ -417,12 +417,12 @@ public class ContractService {
         }
 
         if (operatorId != null) {
-            OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+            Account operator = accountRepository.findById(operatorId)
                     .orElseThrow(() -> new RuntimeException("账号不存在"));
-            if (operator.getRole() == OperatorRole.ADMIN) {
+            if (operator.getAccountType() == AccountType.ADMIN) {
                 return;
             }
-            if (operator.getRole() == OperatorRole.STAFF && operatorId.equals(contract.getAssignedStaffId())) {
+            if (operator.getAccountType() == AccountType.STAFF && operatorId.equals(contract.getAssignedStaffId())) {
                 return;
             }
         }
@@ -441,9 +441,9 @@ public class ContractService {
 
     @Transactional
     public void approveContract(Long contractId, Long adminOperatorId) {
-        OperatorAccount account = operatorAccountRepository.findById(adminOperatorId)
+        Account account = accountRepository.findById(adminOperatorId)
                 .orElseThrow(() -> new RuntimeException("账号不存在"));
-        if (account.getRole() != OperatorRole.ADMIN) {
+        if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
 
@@ -483,9 +483,9 @@ public class ContractService {
 
         Long staffId = preferredStaffId;
         if (staffId != null) {
-            OperatorAccount staff = operatorAccountRepository.findById(staffId)
+            Account staff = accountRepository.findById(staffId)
                     .orElseThrow(() -> new RuntimeException("指定业务员不存在"));
-            if (staff.getRole() != OperatorRole.STAFF || !Boolean.TRUE.equals(staff.getEnabled())) {
+            if (staff.getAccountType() != AccountType.STAFF || !Boolean.TRUE.equals(staff.getEnabled())) {
                 throw new RuntimeException("指定业务员不可用");
             }
         } else {
@@ -540,9 +540,9 @@ public class ContractService {
 
     @Transactional
     public void uploadSignedContract(Long contractId, Long operatorId, MultipartFile file) {
-        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+        Account operator = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("业务员不存在"));
-        if (operator.getRole() != OperatorRole.STAFF && operator.getRole() != OperatorRole.ADMIN) {
+        if (operator.getAccountType() != AccountType.STAFF && operator.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
 
@@ -553,7 +553,7 @@ public class ContractService {
             throw new RuntimeException("当前状态不可上传签约文件");
         }
 
-        if (operator.getRole() == OperatorRole.STAFF && !operatorId.equals(contract.getAssignedStaffId())) {
+        if (operator.getAccountType() == AccountType.STAFF && !operatorId.equals(contract.getAssignedStaffId())) {
             throw new RuntimeException("非当前分配业务员，无法上传");
         }
 
@@ -604,9 +604,9 @@ public class ContractService {
 
     @Transactional
     public void rejectContract(Long contractId, Long adminOperatorId, String reason) {
-        OperatorAccount account = operatorAccountRepository.findById(adminOperatorId)
+        Account account = accountRepository.findById(adminOperatorId)
                 .orElseThrow(() -> new RuntimeException("账号不存在"));
-        if (account.getRole() != OperatorRole.ADMIN) {
+        if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
 
@@ -709,7 +709,7 @@ public class ContractService {
 
     private void handleForceTerminationDecision(TerminationRequest request,
                                                 Contract contract,
-                                                OperatorAccount operator,
+                                                Account operator,
                                                 boolean approve,
                                                 String comment) {
         if (contract.getStatus() != ContractStatus.TERMINATION_FORCE_PENDING_JOINT_REVIEW) {
@@ -718,7 +718,7 @@ public class ContractService {
 
         if (!approve) {
             request.setStatus(TerminationStatus.REJECTED);
-            if (operator.getRole() == OperatorRole.STAFF) {
+            if (operator.getAccountType() == AccountType.STAFF) {
                 request.setStaffFollowUpPlan(comment);
             } else {
                 request.setAdminDecisionComment(comment);
@@ -731,7 +731,7 @@ public class ContractService {
             return;
         }
 
-        if (operator.getRole() == OperatorRole.STAFF) {
+        if (operator.getAccountType() == AccountType.STAFF) {
             if (comment.isEmpty()) {
                 throw new RuntimeException("业务员通过强制终止时必须填写后续方案");
             }
@@ -755,7 +755,7 @@ public class ContractService {
             return;
         }
 
-        if (operator.getRole() == OperatorRole.STAFF) {
+        if (operator.getAccountType() == AccountType.STAFF) {
             messageService.notifyAdmins(
                     "强制终止待管理员裁决",
                     String.format("合同《%s》(ID:%d) 业务员已提交方案，请管理员裁决", contract.getHouse().getTitle(), contract.getId()),

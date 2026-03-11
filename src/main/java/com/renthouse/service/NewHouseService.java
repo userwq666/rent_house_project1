@@ -2,17 +2,17 @@ package com.renthouse.service;
 
 import com.renthouse.domain.Contract;
 import com.renthouse.domain.House;
-import com.renthouse.domain.OperatorAccount;
+import com.renthouse.domain.Account;
 import com.renthouse.domain.User;
 import com.renthouse.dto.CreateHouseRequest;
 import com.renthouse.dto.HouseDTO;
+import com.renthouse.enums.AccountType;
 import com.renthouse.enums.ContractStatus;
 import com.renthouse.enums.HouseStatus;
 import com.renthouse.enums.MessageType;
-import com.renthouse.enums.OperatorRole;
 import com.renthouse.repository.ContractRepository;
 import com.renthouse.repository.HouseRepository;
-import com.renthouse.repository.OperatorAccountRepository;
+import com.renthouse.repository.AccountRepository;
 import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,7 +36,7 @@ public class NewHouseService {
     private OperatorAccountService operatorAccountService;
 
     @Autowired
-    private OperatorAccountRepository operatorAccountRepository;
+    private AccountRepository accountRepository;
 
     @Autowired
     private ContractRepository contractRepository;
@@ -84,14 +84,14 @@ public class NewHouseService {
     }
 
     public List<HouseDTO> getStaffPendingHouses(Long operatorId) {
-        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+        Account operator = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("业务员不存在"));
-        if (operator.getRole() != OperatorRole.STAFF && operator.getRole() != OperatorRole.ADMIN) {
+        if (operator.getAccountType() != AccountType.STAFF && operator.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
         return houseRepository.findAll().stream()
                 .filter(h -> h.getStatus() == HouseStatus.PENDING_STAFF_REVIEW)
-                .filter(h -> operator.getRole() == OperatorRole.ADMIN || operatorId.equals(h.getAssignedStaffId()))
+                .filter(h -> operator.getAccountType() == AccountType.ADMIN || operatorId.equals(h.getAssignedStaffId()))
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
@@ -105,7 +105,7 @@ public class NewHouseService {
             throw new RuntimeException("当前账号已被限制发布房源");
         }
 
-        OperatorAccount assignedStaff = operatorAccountService.pickRandomEnabledStaff();
+        Account assignedStaff = operatorAccountService.pickRandomEnabledStaff();
 
         House house = new House();
         house.setOwner(user);
@@ -222,7 +222,7 @@ public class NewHouseService {
         house.setFacilities(request.getFacilities());
         house.setStatus(HouseStatus.PENDING_STAFF_REVIEW);
 
-        OperatorAccount assignedStaff = operatorAccountService.pickRandomEnabledStaff();
+        Account assignedStaff = operatorAccountService.pickRandomEnabledStaff();
         house.setAssignedStaffId(assignedStaff.getId());
 
         House updated = houseRepository.save(house);
@@ -300,12 +300,12 @@ public class NewHouseService {
     }
 
     private void checkStaffAssignment(House house, Long operatorId) {
-        OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+        Account operator = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("业务员不存在"));
-        if (operator.getRole() == OperatorRole.ADMIN) {
+        if (operator.getAccountType() == AccountType.ADMIN) {
             return;
         }
-        if (operator.getRole() != OperatorRole.STAFF) {
+        if (operator.getAccountType() != AccountType.STAFF) {
             throw new RuntimeException("权限不足");
         }
         if (!operatorId.equals(house.getAssignedStaffId())) {
@@ -318,9 +318,9 @@ public class NewHouseService {
             return;
         }
         if (operatorId != null) {
-            OperatorAccount operator = operatorAccountRepository.findById(operatorId)
+            Account operator = accountRepository.findById(operatorId)
                     .orElseThrow(() -> new RuntimeException("操作员不存在"));
-            if (operator.getRole() == OperatorRole.ADMIN) {
+            if (operator.getAccountType() == AccountType.ADMIN) {
                 return;
             }
         }

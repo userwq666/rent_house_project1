@@ -31,6 +31,12 @@ public class Account {
     @Column(name = "account_type", nullable = false, length = 20)
     private AccountType accountType = AccountType.USER;
 
+    @Column(name = "display_name", length = 80)
+    private String displayName;
+
+    @Column(length = 20)
+    private String phone;
+
     @Column(nullable = false)
     private Boolean enabled = true;
 
