@@ -5,7 +5,6 @@ import com.renthouse.dto.CreateStaffRequest;
 import com.renthouse.dto.OperatorAccountResponse;
 import com.renthouse.dto.UpdateOperatorStatusRequest;
 import com.renthouse.enums.AccountType;
-import com.renthouse.enums.OperatorRole;
 import com.renthouse.service.OperatorAccountService;
 import com.renthouse.util.AuthUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +61,7 @@ public class AdminOperatorController {
         resp.setUsername(account.getUsername());
         resp.setDisplayName(account.getDisplayName());
         resp.setPhone(account.getPhone());
-        resp.setRole(OperatorRole.valueOf(account.getAccountType().name()));
+        resp.setRole(account.getAccountType().name());
         resp.setEnabled(account.getEnabled());
         resp.setCreatedAt(account.getCreatedAt());
         return resp;

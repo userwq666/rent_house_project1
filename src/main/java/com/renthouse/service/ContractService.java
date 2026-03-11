@@ -4,7 +4,6 @@ import com.renthouse.domain.Contract;
 import com.renthouse.domain.House;
 import com.renthouse.domain.Account;
 import com.renthouse.domain.TerminationRequest;
-import com.renthouse.domain.User;
 import com.renthouse.dto.ContractDTO;
 import com.renthouse.dto.CreateContractRequest;
 import com.renthouse.dto.TerminateContractRequest;
@@ -18,7 +17,6 @@ import com.renthouse.repository.AccountRepository;
 import com.renthouse.repository.ContractRepository;
 import com.renthouse.repository.HouseRepository;
 import com.renthouse.repository.TerminationRequestRepository;
-import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +29,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -44,9 +44,6 @@ public class ContractService {
 
     @Autowired
     private HouseRepository houseRepository;
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -73,7 +70,8 @@ public class ContractService {
             throw new RuntimeException("不能租自己的房子");
         }
 
-        User tenant = userRepository.findById(request.getTenantId())
+        Account tenant = accountRepository.findById(request.getTenantId())
+                .filter(account -> account.getAccountType() == AccountType.USER)
                 .orElseThrow(() -> new RuntimeException("租客不存在"));
 
         if (!tenant.getId().equals(currentUserId)) {
@@ -167,9 +165,10 @@ public class ContractService {
             throw new RuntimeException("已有待处理的终止申请");
         }
 
-        User requester = userRepository.findById(userId)
+        Account requester = accountRepository.findById(userId)
+                .filter(account -> account.getAccountType() == AccountType.USER)
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
-        User counterparty = resolveCounterparty(contract, userId);
+        Account counterparty = resolveCounterparty(contract, userId);
 
         Long staffId = contract.getAssignedStaffId();
         if (staffId == null) {
@@ -187,10 +186,11 @@ public class ContractService {
         if (force) {
             String forceReason = request.getForceReason() == null ? "" : request.getForceReason().trim();
             String evidenceUrls = request.getEvidenceUrls() == null ? "" : request.getEvidenceUrls().trim();
+            String normalizedEvidenceUrls = normalizeEvidenceUrls(contractId, evidenceUrls);
             if (forceReason.isEmpty()) {
                 throw new RuntimeException("强制终止必须填写原因");
             }
-            if (evidenceUrls.isEmpty()) {
+            if (normalizedEvidenceUrls.isEmpty()) {
                 throw new RuntimeException("强制终止必须上传证据附件");
             }
             int rejectCount = getRequesterRejectCount(contract, userId);
@@ -200,7 +200,7 @@ public class ContractService {
 
             terminationRequest.setForceRequest(true);
             terminationRequest.setForceReason(forceReason);
-            terminationRequest.setEvidenceUrls(evidenceUrls);
+            terminationRequest.setEvidenceUrls(normalizedEvidenceUrls);
             terminationRequest.setReason(request.getReason());
             terminationRequestRepository.save(terminationRequest);
 
@@ -638,7 +638,7 @@ public class ContractService {
         messageService.sendMessage(null, contract.getLandlord().getId(), "合同审核未通过", "管理员驳回合同，等待业务员补充重传", MessageType.CONTRACT_REJECTION_NOTICE, contract.getId(), null, false);
     }
 
-    private User resolveCounterparty(Contract contract, Long userId) {
+    private Account resolveCounterparty(Contract contract, Long userId) {
         if (contract.getLandlord().getId().equals(userId)) {
             return contract.getTenant();
         }
@@ -705,6 +705,65 @@ public class ContractService {
         }
         int current = contract.getTenantTerminationRejectCount() == null ? 0 : contract.getTenantTerminationRejectCount();
         contract.setTenantTerminationRejectCount(current + 1);
+    }
+
+    private String normalizeEvidenceUrls(Long contractId, String rawEvidenceUrls) {
+        if (rawEvidenceUrls == null || rawEvidenceUrls.isBlank()) {
+            return "";
+        }
+        List<String> normalized = new ArrayList<>();
+        for (String entry : rawEvidenceUrls.split("[,|]")) {
+            String item = entry == null ? "" : entry.trim();
+            if (item.isEmpty()) {
+                continue;
+            }
+            if (item.startsWith("/uploads/contracts/" + contractId + "/")) {
+                normalized.add(item);
+                continue;
+            }
+            if (item.startsWith("data:")) {
+                normalized.add(saveEvidenceDataUri(contractId, item));
+                continue;
+            }
+            normalized.add(item);
+        }
+        return String.join(",", normalized);
+    }
+
+    private String saveEvidenceDataUri(Long contractId, String dataUri) {
+        int commaIndex = dataUri.indexOf(',');
+        if (commaIndex <= 0) {
+            throw new RuntimeException("证据格式不正确");
+        }
+        String meta = dataUri.substring(0, commaIndex);
+        String payload = dataUri.substring(commaIndex + 1);
+
+        String ext = ".bin";
+        if (meta.contains("image/png")) {
+            ext = ".png";
+        } else if (meta.contains("image/jpeg") || meta.contains("image/jpg")) {
+            ext = ".jpg";
+        } else if (meta.contains("application/pdf")) {
+            ext = ".pdf";
+        }
+
+        byte[] content;
+        try {
+            content = Base64.getDecoder().decode(payload);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("证据解析失败");
+        }
+
+        String fileName = "evidence-" + UUID.randomUUID() + ext;
+        Path dir = Paths.get("uploads", "contracts", String.valueOf(contractId), "termination");
+        Path target = dir.resolve(fileName);
+        try {
+            Files.createDirectories(dir);
+            Files.write(target, content);
+        } catch (IOException e) {
+            throw new RuntimeException("证据保存失败: " + e.getMessage());
+        }
+        return "/uploads/contracts/" + contractId + "/termination/" + fileName;
     }
 
     private void handleForceTerminationDecision(TerminationRequest request,

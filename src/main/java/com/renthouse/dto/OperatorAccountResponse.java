@@ -1,6 +1,5 @@
 package com.renthouse.dto;
 
-import com.renthouse.enums.OperatorRole;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -11,7 +10,7 @@ public class OperatorAccountResponse {
     private String username;
     private String displayName;
     private String phone;
-    private OperatorRole role;
+    private String role;
     private Boolean enabled;
     private LocalDateTime createdAt;
 }

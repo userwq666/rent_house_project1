@@ -10,9 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * 租房合同实体
- */
 @Entity
 @Table(name = "contracts")
 @Data
@@ -28,11 +25,11 @@ public class Contract {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "landlord_id", nullable = false)
-    private User landlord;
+    private Account landlord;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
-    private User tenant;
+    private Account tenant;
 
     @Column(name = "rent_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal rentPrice;

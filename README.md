@@ -1,4 +1,4 @@
-﻿# 租房管理系统
+# 租房管理系统
 
 基于 `Spring Boot 3 + Vue 3` 的前后端分离项目，覆盖房源发布、租房申请、合同审批、合同终止、消息中心与后台管理流程。
 
@@ -27,25 +27,27 @@ docs/                            文档
 pom.xml                          Maven 配置
 ```
 
-## 核心功能
+## 核心重构说明（rank2）
 
-- 用户注册登录、个人资料维护
-- 房东发布/编辑/上下架房源
-- 租客发起租房申请（合同创建）
-- 合同多阶段流转：房东审批 -> 业务员签约 -> 管理员审核
-- 普通终止与强制终止（业务员/管理员联审）
-- 消息中心支持“执行业务动作”并回写消息状态
-- 联系人支持 USER / OPERATOR 统一检索与会话
+- 统一账号模型：仅保留 `accounts`，通过 `account_type=USER/STAFF/ADMIN` 区分身份。
+- 删除旧表：`users`、`operator_accounts` 已从 schema 中移除。
+- 消息会话稳定化：会话分组继续使用 `contactType + contactId`，避免串线。
+- 消息动作执行业务：消息卡片操作先调用业务接口，再回写消息状态 `ACCEPT/REJECT`。
+- 文件存储改造：
+  - 合同签约文件：`uploads/contracts/{contractId}/signed/*`
+  - 强制终止证据：`uploads/contracts/{contractId}/termination/{requestId}/*`
+  - 房源图片：`uploads/houses/{houseId}/gallery/*`
+  - 数据库保存访问路径（如 `signed_contract_url`、`evidence_urls`、`houses.images`）。
 
 ## 快速启动
 
-### 1. 初始化数据库
+### 1) 初始化数据库
 
 ```bash
 mysql -u root -p < src/main/resources/init-database.sql
 ```
 
-### 2. 配置后端数据库连接
+### 2) 配置后端数据库连接
 
 编辑 `src/main/resources/application.properties`：
 
@@ -55,7 +57,7 @@ spring.datasource.username=root
 spring.datasource.password=你的数据库密码
 ```
 
-### 3. 启动后端
+### 3) 启动后端
 
 ```bash
 mvn spring-boot:run
@@ -63,7 +65,7 @@ mvn spring-boot:run
 
 后端默认地址：`http://localhost:8080`
 
-### 4. 启动前端
+### 4) 启动前端
 
 ```bash
 cd frontend
@@ -78,18 +80,16 @@ npm run dev
 - 用户名：`admin`
 - 密码：`123456`
 
-建议首次登录后立即修改。
-
 ## 关键接口（节选）
 
 ### 认证
-- `POST /api/auth/register`
+- `POST /api/auth/register`（支持 `accountType`，创建 `STAFF` 需管理员登录态）
 - `POST /api/auth/login`
 - `GET /api/auth/me`
-- `GET /api/auth/contact/{username}` 统一联系人查询（USER/OPERATOR）
+- `GET /api/auth/contact/{username}`
 
 ### 合同
-- `POST /api/contracts` 创建合同（租房申请）
+- `POST /api/contracts`
 - `PUT /api/contracts/{id}/landlord/approve`
 - `PUT /api/contracts/{id}/landlord/reject`
 - `POST /api/contracts/{id}/signed-file`
@@ -111,11 +111,6 @@ npm run dev
 ## 构建验证
 
 ```bash
-mvn -DskipTests compile
+mvn -DskipTests clean compile
 npm --prefix frontend run build
 ```
-
-## 说明
-
-- `schema.sql` 与 `schema-v3.sql` 已包含消息表 `related_house_id`、操作员收发字段等结构。
-- 消息中心动作遵循“先执行业务接口，再回写消息状态（ACCEPT/REJECT）”。

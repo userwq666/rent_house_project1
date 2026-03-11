@@ -8,9 +8,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * 合同终止申请
- */
 @Entity
 @Table(name = "termination_requests")
 @Data
@@ -26,11 +23,11 @@ public class TerminationRequest {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "requester_id", nullable = false)
-    private User requester;
+    private Account requester;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "responder_id")
-    private User responder;
+    private Account responder;
 
     @Column(name = "review_staff_id")
     private Long reviewStaffId;

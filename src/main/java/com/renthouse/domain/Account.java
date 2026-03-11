@@ -8,10 +8,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * 系统账号实体
- * 用于登录认证和权限控制
- */
 @Entity
 @Table(name = "accounts")
 @Data
@@ -31,11 +27,23 @@ public class Account {
     @Column(name = "account_type", nullable = false, length = 20)
     private AccountType accountType = AccountType.USER;
 
+    @Column(name = "real_name", length = 50)
+    private String realName;
+
     @Column(name = "display_name", length = 80)
     private String displayName;
 
     @Column(length = 20)
     private String phone;
+
+    @Column(length = 100)
+    private String email;
+
+    @Column(name = "id_card", length = 20)
+    private String idCard;
+
+    @Column(length = 255)
+    private String avatar;
 
     @Column(nullable = false)
     private Boolean enabled = true;
@@ -53,8 +61,4 @@ public class Account {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    // 一对一关联用户信息
-    @OneToOne(mappedBy = "account", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private User user;
 }

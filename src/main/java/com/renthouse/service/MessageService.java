@@ -2,14 +2,12 @@ package com.renthouse.service;
 
 import com.renthouse.domain.Message;
 import com.renthouse.domain.Account;
-import com.renthouse.domain.User;
 import com.renthouse.dto.MessageDTO;
 import com.renthouse.enums.AccountType;
 import com.renthouse.enums.MessageStatus;
 import com.renthouse.enums.MessageType;
 import com.renthouse.repository.MessageRepository;
 import com.renthouse.repository.AccountRepository;
-import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -28,9 +26,6 @@ public class MessageService {
     private MessageRepository messageRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private AccountRepository accountRepository;
 
     private static final Long SYSTEM_ID = -1L;
@@ -46,13 +41,16 @@ public class MessageService {
 
     public Message sendMessage(Long senderId, Long receiverId, String title, String content,
                                MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        User sender = senderId != null && !senderId.equals(SYSTEM_ID)
-                ? userRepository.findById(senderId).orElse(null)
+        Account sender = senderId != null && !senderId.equals(SYSTEM_ID)
+                ? accountRepository.findById(senderId)
+                    .filter(account -> account.getAccountType() == AccountType.USER)
+                    .orElse(null)
                 : null;
         if (receiverId != null && receiverId.equals(SYSTEM_ID)) {
             throw new RuntimeException("系统消息只允许系统向用户发送");
         }
-        User receiver = receiverId != null ? userRepository.findById(receiverId)
+        Account receiver = receiverId != null ? accountRepository.findById(receiverId)
+                .filter(account -> account.getAccountType() == AccountType.USER)
                 .orElseThrow(() -> new RuntimeException("接收方不存在")) : null;
 
         Message message = new Message();
@@ -128,8 +126,9 @@ public class MessageService {
         if (sender != null && sender.getAccountType() == AccountType.USER) {
             throw new RuntimeException("发送方必须是管理员/业务员");
         }
-        User receiver = receiverUserId != null
-                ? userRepository.findById(receiverUserId)
+        Account receiver = receiverUserId != null
+                ? accountRepository.findById(receiverUserId)
+                .filter(account -> account.getAccountType() == AccountType.USER)
                 .orElseThrow(() -> new RuntimeException("接收方不存在"))
                 : null;
 
@@ -160,8 +159,9 @@ public class MessageService {
         if (receiverOperatorId == null) {
             throw new RuntimeException("接收业务账号不能为空");
         }
-        User sender = senderUserId != null
-                ? userRepository.findById(senderUserId)
+        Account sender = senderUserId != null
+                ? accountRepository.findById(senderUserId)
+                .filter(account -> account.getAccountType() == AccountType.USER)
                 .orElseThrow(() -> new RuntimeException("发送方用户不存在"))
                 : null;
         Account receiver = accountRepository.findById(receiverOperatorId)

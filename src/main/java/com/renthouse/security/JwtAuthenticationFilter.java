@@ -1,6 +1,6 @@
 package com.renthouse.security;
 
-import com.renthouse.enums.OperatorRole;
+import com.renthouse.enums.AccountType;
 import com.renthouse.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -33,20 +33,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = authHeader.substring(7);
 
             if (jwtUtil.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
-                String principalType = jwtUtil.extractPrincipalType(token);
+                Long accountId = jwtUtil.extractAccountId(token);
+                String accountTypeStr = jwtUtil.extractAccountType(token);
                 AuthenticatedUser principal = null;
 
-                if ("OPERATOR".equals(principalType)) {
-                    Long operatorId = jwtUtil.extractOperatorId(token);
-                    String role = jwtUtil.extractOperatorRole(token);
-                    if (operatorId != null && role != null) {
-                        principal = AuthenticatedUser.forOperator(operatorId, OperatorRole.valueOf(role));
-                    }
-                } else {
-                    Long userId = jwtUtil.extractUserId(token);
-                    Long accountId = jwtUtil.extractAccountId(token);
-                    if (userId != null && accountId != null) {
-                        principal = AuthenticatedUser.forUser(userId, accountId);
+                if (accountId != null && accountTypeStr != null) {
+                    try {
+                        AccountType accountType = AccountType.valueOf(accountTypeStr);
+                        principal = new AuthenticatedUser(accountId, accountType);
+                    } catch (IllegalArgumentException ignored) {
+                        principal = null;
                     }
                 }
 

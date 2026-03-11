@@ -30,14 +30,6 @@ export function fetchStaffList() {
   })
 }
 
-export function createStaff(data) {
-  return request({
-    url: '/api/admin/operators/staff',
-    method: 'post',
-    data
-  })
-}
-
 export function updateStaffStatus(id, data) {
   return request({
     url: `/api/admin/operators/${id}/status`,

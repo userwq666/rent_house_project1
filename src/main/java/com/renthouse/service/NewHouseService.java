@@ -1,36 +1,38 @@
 package com.renthouse.service;
 
+import com.renthouse.domain.Account;
 import com.renthouse.domain.Contract;
 import com.renthouse.domain.House;
-import com.renthouse.domain.Account;
-import com.renthouse.domain.User;
 import com.renthouse.dto.CreateHouseRequest;
 import com.renthouse.dto.HouseDTO;
 import com.renthouse.enums.AccountType;
 import com.renthouse.enums.ContractStatus;
 import com.renthouse.enums.HouseStatus;
 import com.renthouse.enums.MessageType;
+import com.renthouse.repository.AccountRepository;
 import com.renthouse.repository.ContractRepository;
 import com.renthouse.repository.HouseRepository;
-import com.renthouse.repository.AccountRepository;
-import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Service
 public class NewHouseService {
 
-    @Autowired
-    private HouseRepository houseRepository;
+    private static final int MAX_IMAGES = 4;
 
     @Autowired
-    private UserRepository userRepository;
+    private HouseRepository houseRepository;
 
     @Autowired
     private OperatorAccountService operatorAccountService;
@@ -48,24 +50,22 @@ public class NewHouseService {
         return houseRepository.findByStatus(HouseStatus.AVAILABLE)
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public List<HouseDTO> searchHouses(String district, BigDecimal minPrice, BigDecimal maxPrice) {
         return houseRepository.searchHouses(HouseStatus.AVAILABLE, district, minPrice, maxPrice)
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Transactional
     public HouseDTO getHouseById(Long id) {
         House house = houseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
-
-        house.setViewCount(house.getViewCount() + 1);
+        house.setViewCount((house.getViewCount() == null ? 0 : house.getViewCount()) + 1);
         houseRepository.save(house);
-
         return convertToDTO(house);
     }
 
@@ -73,14 +73,14 @@ public class NewHouseService {
         return houseRepository.findByOwnerId(userId)
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public List<HouseDTO> getAllHouses() {
         return houseRepository.findAll()
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public List<HouseDTO> getStaffPendingHouses(Long operatorId) {
@@ -93,43 +93,34 @@ public class NewHouseService {
                 .filter(h -> h.getStatus() == HouseStatus.PENDING_STAFF_REVIEW)
                 .filter(h -> operator.getAccountType() == AccountType.ADMIN || operatorId.equals(h.getAssignedStaffId()))
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Transactional
     public HouseDTO createHouse(CreateHouseRequest request, Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("用户不存在"));
-
-        if (user.getAccount() != null && Boolean.FALSE.equals(user.getAccount().getCanPublish())) {
+        Account owner = requireUserAccount(userId);
+        if (Boolean.FALSE.equals(owner.getCanPublish())) {
             throw new RuntimeException("当前账号已被限制发布房源");
         }
 
         Account assignedStaff = operatorAccountService.pickRandomEnabledStaff();
 
         House house = new House();
-        house.setOwner(user);
-        house.setTitle(request.getTitle());
-        house.setAddress(request.getAddress());
-        house.setDistrict(request.getDistrict());
-        house.setHouseType(request.getHouseType());
-        house.setArea(request.getArea());
-        house.setFloor(request.getFloor());
-        house.setRentPrice(request.getRentPrice());
-        house.setDeposit(request.getDeposit());
-        house.setDescription(request.getDescription());
-        house.setImages(request.getImages());
-        house.setFacilities(request.getFacilities());
+        house.setOwner(owner);
+        applyHousePayload(house, request);
+        house.setImages(null);
         house.setStatus(HouseStatus.PENDING_STAFF_REVIEW);
         house.setAssignedStaffId(assignedStaff.getId());
         house.setViewCount(0);
 
         House saved = houseRepository.save(house);
+        saved.setImages(persistHouseImages(saved.getId(), request.getImages()));
+        saved = houseRepository.save(saved);
 
         messageService.notifyStaff(
                 assignedStaff.getId(),
                 "房源待审核",
-                String.format("房东 %s 发布了新房源《%s》，请审核", user.getRealName(), saved.getTitle()),
+                String.format("房东 %s 发布了新房源《%s》，请审核", displayName(owner), saved.getTitle()),
                 null,
                 saved.getId(),
                 null,
@@ -177,7 +168,7 @@ public class NewHouseService {
         }
         house.setStatus(HouseStatus.OFFLINE);
         house.setReviewedAt(LocalDateTime.now());
-        house.setReviewComment(reason == null || reason.isBlank() ? "审核未通过" : reason);
+        house.setReviewComment(reason == null || reason.isBlank() ? "审核未通过" : reason.trim());
         House saved = houseRepository.save(house);
 
         messageService.sendMessage(
@@ -198,28 +189,17 @@ public class NewHouseService {
     public HouseDTO updateHouse(Long houseId, CreateHouseRequest request, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
-
         checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
-            throw new RuntimeException("该房源有待审批/进行中的合同，暂不支持编辑");
+            throw new RuntimeException("该房源有关联合同处理中，暂不支持编辑");
         }
-
         if (house.getStatus() == HouseStatus.RENTED) {
             throw new RuntimeException("房源已出租，暂不支持编辑");
         }
 
-        house.setTitle(request.getTitle());
-        house.setAddress(request.getAddress());
-        house.setDistrict(request.getDistrict());
-        house.setHouseType(request.getHouseType());
-        house.setArea(request.getArea());
-        house.setFloor(request.getFloor());
-        house.setRentPrice(request.getRentPrice());
-        house.setDeposit(request.getDeposit());
-        house.setDescription(request.getDescription());
-        house.setImages(request.getImages());
-        house.setFacilities(request.getFacilities());
+        applyHousePayload(house, request);
+        house.setImages(persistHouseImages(house.getId(), request.getImages()));
         house.setStatus(HouseStatus.PENDING_STAFF_REVIEW);
 
         Account assignedStaff = operatorAccountService.pickRandomEnabledStaff();
@@ -229,7 +209,7 @@ public class NewHouseService {
         messageService.notifyStaff(
                 assignedStaff.getId(),
                 "房源待复审",
-                String.format("房源《%s》已更新，请复审", house.getTitle()),
+                String.format("房源《%s》已更新，请复审", updated.getTitle()),
                 null,
                 updated.getId(),
                 null,
@@ -243,17 +223,14 @@ public class NewHouseService {
     public void offlineHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
-
         checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
-            throw new RuntimeException("该房源有待审批/进行中的合同，暂不可下架");
+            throw new RuntimeException("该房源有关联合同处理中，暂不可下架");
         }
-
         if (house.getStatus() == HouseStatus.RENTED) {
             throw new RuntimeException("房源已出租，无法下架");
         }
-
         house.setStatus(HouseStatus.OFFLINE);
         houseRepository.save(house);
     }
@@ -262,21 +239,17 @@ public class NewHouseService {
     public void onlineHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
-
         checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
-            throw new RuntimeException("该房源有待审批/进行中的合同，暂不可上架");
+            throw new RuntimeException("该房源有关联合同处理中，暂不可上架");
         }
-
         if (house.getStatus() == HouseStatus.RENTED) {
             throw new RuntimeException("房源已出租，无法上架");
         }
-
         if (house.getStatus() == HouseStatus.PENDING_STAFF_REVIEW) {
             throw new RuntimeException("房源审核中，无法直接上架");
         }
-
         house.setStatus(HouseStatus.AVAILABLE);
         houseRepository.save(house);
     }
@@ -285,18 +258,37 @@ public class NewHouseService {
     public void deleteHouse(Long houseId, Long userId, Long operatorId) {
         House house = houseRepository.findById(houseId)
                 .orElseThrow(() -> new RuntimeException("房源不存在"));
-
         checkHousePermission(house, userId, operatorId);
 
         if (isHouseLocked(house.getId())) {
-            throw new RuntimeException("该房源有待审批/进行中的合同，暂不可删除");
+            throw new RuntimeException("该房源有关联合同处理中，暂不可删除");
         }
-
         if (house.getStatus() == HouseStatus.RENTED) {
             throw new RuntimeException("房源已出租，无法删除");
         }
-
         houseRepository.delete(house);
+    }
+
+    private void applyHousePayload(House house, CreateHouseRequest request) {
+        house.setTitle(request.getTitle());
+        house.setAddress(request.getAddress());
+        house.setDistrict(request.getDistrict());
+        house.setHouseType(request.getHouseType());
+        house.setArea(request.getArea());
+        house.setFloor(request.getFloor());
+        house.setRentPrice(request.getRentPrice());
+        house.setDeposit(request.getDeposit());
+        house.setDescription(request.getDescription());
+        house.setFacilities(request.getFacilities());
+    }
+
+    private Account requireUserAccount(Long accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        if (account.getAccountType() != AccountType.USER) {
+            throw new RuntimeException("仅普通用户可操作");
+        }
+        return account;
     }
 
     private void checkStaffAssignment(House house, Long operatorId) {
@@ -324,14 +316,14 @@ public class NewHouseService {
                 return;
             }
         }
-        throw new RuntimeException("权限不足：只能操作自己的房源");
+        throw new RuntimeException("权限不足：仅可操作自己的房源");
     }
 
     private HouseDTO convertToDTO(House house) {
         HouseDTO dto = new HouseDTO();
         dto.setId(house.getId());
         dto.setOwnerId(house.getOwner().getId());
-        dto.setOwnerName(house.getOwner().getRealName());
+        dto.setOwnerName(displayName(house.getOwner()));
         dto.setTitle(house.getTitle());
         dto.setAddress(house.getAddress());
         dto.setDistrict(house.getDistrict());
@@ -354,7 +346,7 @@ public class NewHouseService {
         contractRepository.findActiveContractByHouseId(house.getId())
                 .ifPresent(contract -> {
                     dto.setCurrentTenantId(contract.getTenant().getId());
-                    dto.setCurrentTenantName(contract.getTenant().getRealName());
+                    dto.setCurrentTenantName(displayName(contract.getTenant()));
                     dto.setCurrentTenantPhone(contract.getTenant().getPhone());
                 });
         return dto;
@@ -371,5 +363,95 @@ public class NewHouseService {
                 ContractStatus.TERMINATION_PENDING_STAFF_REVIEW,
                 ContractStatus.TERMINATION_FORCE_PENDING_JOINT_REVIEW
         ));
+    }
+
+    private String displayName(Account account) {
+        if (account == null) {
+            return "未知";
+        }
+        if (account.getRealName() != null && !account.getRealName().isBlank()) {
+            return account.getRealName();
+        }
+        if (account.getDisplayName() != null && !account.getDisplayName().isBlank()) {
+            return account.getDisplayName();
+        }
+        return account.getUsername();
+    }
+
+    private String persistHouseImages(Long houseId, String rawImages) {
+        if (rawImages == null || rawImages.isBlank()) {
+            return null;
+        }
+
+        List<String> values = parseImageValues(rawImages);
+        if (values.isEmpty()) {
+            return null;
+        }
+        if (values.size() > MAX_IMAGES) {
+            throw new RuntimeException("房源图片最多4张");
+        }
+
+        List<String> urls = new ArrayList<>();
+        for (String value : values) {
+            if (value.startsWith("/uploads/houses/" + houseId + "/")) {
+                urls.add(value);
+                continue;
+            }
+            if (!value.startsWith("data:image/")) {
+                throw new RuntimeException("图片格式非法");
+            }
+            urls.add(saveBase64ImageToHouseDir(houseId, value));
+        }
+        return String.join("|", urls);
+    }
+
+    private List<String> parseImageValues(String rawImages) {
+        List<String> values = new ArrayList<>();
+        for (String part : rawImages.split("\\|")) {
+            String value = part == null ? "" : part.trim();
+            if (!value.isEmpty()) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    private String saveBase64ImageToHouseDir(Long houseId, String dataUri) {
+        int comma = dataUri.indexOf(',');
+        if (comma <= 0) {
+            throw new RuntimeException("图片数据损坏");
+        }
+        String meta = dataUri.substring(0, comma);
+        String base64 = dataUri.substring(comma + 1);
+
+        String ext = ".jpg";
+        if (meta.contains("image/png")) {
+            ext = ".png";
+        } else if (meta.contains("image/webp")) {
+            ext = ".webp";
+        } else if (meta.contains("image/jpeg") || meta.contains("image/jpg")) {
+            ext = ".jpg";
+        }
+
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("图片Base64解析失败");
+        }
+        if (bytes.length > 2L * 1024 * 1024) {
+            throw new RuntimeException("图片不能超过2MB");
+        }
+
+        String fileName = UUID.randomUUID() + ext;
+        Path dir = Paths.get("uploads", "houses", String.valueOf(houseId), "gallery");
+        Path target = dir.resolve(fileName);
+        try {
+            Files.createDirectories(dir);
+            Files.write(target, bytes);
+        } catch (Exception e) {
+            throw new RuntimeException("图片保存失败: " + e.getMessage());
+        }
+        return "/uploads/houses/" + houseId + "/gallery/" + fileName;
     }
 }

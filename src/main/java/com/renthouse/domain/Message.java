@@ -8,9 +8,6 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * 系统消息/对话记录
- */
 @Entity
 @Table(name = "messages")
 @Data
@@ -22,11 +19,11 @@ public class Message {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id")
-    private User sender;
+    private Account sender;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "receiver_id")
-    private User receiver;
+    private Account receiver;
 
     @Column(name = "sender_operator_id")
     private Long senderOperatorId;
@@ -73,10 +70,6 @@ public class Message {
     @Column(name = "read_at")
     private LocalDateTime readAt;
 
-    /**
-     * 已归档此消息的用户 ID 列表（逗号分隔）
-     * 用于实现单方面隐藏聊天记录
-     */
     @Column(name = "archived_by_user_ids", length = 500)
     private String archivedByUserIds;
 }

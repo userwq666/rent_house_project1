@@ -1,6 +1,6 @@
 package com.renthouse.util;
 
-import com.renthouse.enums.OperatorRole;
+import com.renthouse.enums.AccountType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -24,40 +24,35 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateUserToken(Long userId, Long accountId) {
+    public String generateToken(Long accountId, AccountType accountType) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("principalType", "USER");
-        claims.put("userId", userId);
         claims.put("accountId", accountId);
-        return createToken(claims, String.valueOf(userId));
-    }
-
-    public String generateOperatorToken(Long operatorId, OperatorRole role) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("principalType", "OPERATOR");
-        claims.put("operatorId", operatorId);
-        claims.put("operatorRole", role.name());
-        return createToken(claims, String.valueOf(operatorId));
+        claims.put("accountType", accountType.name());
+        claims.put("principalType", accountType == AccountType.USER ? "USER" : "OPERATOR");
+        claims.put("userId", accountType == AccountType.USER ? accountId : null);
+        claims.put("operatorId", accountType == AccountType.USER ? null : accountId);
+        return createToken(claims, String.valueOf(accountId));
     }
 
     public String extractPrincipalType(String token) {
         return extractClaim(token, claims -> claims.get("principalType", String.class));
     }
 
-    public Long extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("userId", Long.class));
-    }
-
     public Long extractAccountId(String token) {
         return extractClaim(token, claims -> claims.get("accountId", Long.class));
     }
 
-    public Long extractOperatorId(String token) {
-        return extractClaim(token, claims -> claims.get("operatorId", Long.class));
+    public String extractAccountType(String token) {
+        return extractClaim(token, claims -> claims.get("accountType", String.class));
     }
 
-    public String extractOperatorRole(String token) {
-        return extractClaim(token, claims -> claims.get("operatorRole", String.class));
+    // Legacy readers kept for transitional frontend/session values.
+    public Long extractUserId(String token) {
+        return extractClaim(token, claims -> claims.get("userId", Long.class));
+    }
+
+    public Long extractOperatorId(String token) {
+        return extractClaim(token, claims -> claims.get("operatorId", Long.class));
     }
 
     public Date extractExpiration(String token) {

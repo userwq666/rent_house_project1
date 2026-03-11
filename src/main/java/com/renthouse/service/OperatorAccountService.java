@@ -51,6 +51,7 @@ public class OperatorAccountService {
         staff.setUsername(username);
         staff.setPassword(passwordEncoder.encode(password));
         staff.setAccountType(AccountType.STAFF);
+        staff.setRealName(displayName);
         staff.setDisplayName(displayName);
         staff.setPhone(phone);
         staff.setEnabled(true);

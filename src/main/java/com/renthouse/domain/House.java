@@ -10,9 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * 房屋信息实体
- */
 @Entity
 @Table(name = "houses")
 @Data
@@ -24,7 +21,7 @@ public class House {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
-    private User owner;
+    private Account owner;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -56,7 +53,6 @@ public class House {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Lob
     @Column(columnDefinition = "MEDIUMTEXT")
     private String images;
 
@@ -83,18 +79,6 @@ public class House {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // 关联的合同
     @OneToMany(mappedBy = "house", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Contract> contracts;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 }
