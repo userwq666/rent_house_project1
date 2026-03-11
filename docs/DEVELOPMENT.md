@@ -70,7 +70,7 @@ npm run dev
 
 - 消息卡片按钮执行真实业务接口，不是单纯改消息状态。
 - 动作成功后再调用 `/api/messages/{id}/status` 写回 `ACCEPT/REJECT`。
-- 会话键使用 `contactType + contactId`（`USER/OPERATOR/SYSTEM`）避免串线。
+- 会话键使用 `contactType + contactId`（`USER/STAFF/ADMIN/SYSTEM`）避免串线。
 
 ## 6. 文件存储
 

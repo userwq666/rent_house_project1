@@ -116,12 +116,8 @@ CREATE TABLE IF NOT EXISTS termination_requests (
 
 CREATE TABLE IF NOT EXISTS messages (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    sender_id BIGINT NULL COMMENT 'USER sender accounts.id',
-    receiver_id BIGINT NULL COMMENT 'USER receiver accounts.id',
-    sender_operator_id BIGINT NULL COMMENT 'STAFF/ADMIN sender accounts.id',
-    receiver_operator_id BIGINT NULL COMMENT 'STAFF/ADMIN receiver accounts.id',
-    sender_operator_name VARCHAR(80) NULL,
-    receiver_operator_name VARCHAR(80) NULL,
+    sender_id BIGINT NULL COMMENT 'Sender accounts.id',
+    receiver_id BIGINT NULL COMMENT 'Receiver accounts.id',
     title VARCHAR(200) NULL,
     content TEXT NULL,
     message_type VARCHAR(50) NULL,
@@ -137,8 +133,6 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (receiver_id) REFERENCES accounts(id) ON DELETE SET NULL,
     INDEX idx_messages_sender (sender_id),
     INDEX idx_messages_receiver (receiver_id),
-    INDEX idx_messages_sender_operator (sender_operator_id),
-    INDEX idx_messages_receiver_operator (receiver_operator_id),
     INDEX idx_messages_status (status),
     INDEX idx_messages_contract (related_contract_id),
     INDEX idx_messages_house (related_house_id)

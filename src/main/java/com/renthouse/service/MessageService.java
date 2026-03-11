@@ -1,13 +1,13 @@
 package com.renthouse.service;
 
-import com.renthouse.domain.Message;
 import com.renthouse.domain.Account;
+import com.renthouse.domain.Message;
 import com.renthouse.dto.MessageDTO;
 import com.renthouse.enums.AccountType;
 import com.renthouse.enums.MessageStatus;
 import com.renthouse.enums.MessageType;
-import com.renthouse.repository.MessageRepository;
 import com.renthouse.repository.AccountRepository;
+import com.renthouse.repository.MessageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -30,28 +30,40 @@ public class MessageService {
 
     private static final Long SYSTEM_ID = -1L;
     private static final String SYSTEM_NAME = "系统消息";
-    private static final String CONTACT_USER = "USER";
-    private static final String CONTACT_OPERATOR = "OPERATOR";
     private static final String CONTACT_SYSTEM = "SYSTEM";
 
-    public Message sendMessage(Long senderId, Long receiverId, String title, String content,
-                               MessageType type, Long contractId, Long requestId, boolean requireAction) {
+    public Message sendMessage(Long senderId,
+                               Long receiverId,
+                               String title,
+                               String content,
+                               MessageType type,
+                               Long contractId,
+                               Long requestId,
+                               boolean requireAction) {
         return sendMessage(senderId, receiverId, title, content, type, contractId, null, requestId, requireAction);
     }
 
-    public Message sendMessage(Long senderId, Long receiverId, String title, String content,
-                               MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        Account sender = senderId != null && !senderId.equals(SYSTEM_ID)
-                ? accountRepository.findById(senderId)
-                    .filter(account -> account.getAccountType() == AccountType.USER)
-                    .orElse(null)
-                : null;
-        if (receiverId != null && receiverId.equals(SYSTEM_ID)) {
-            throw new RuntimeException("系统消息只允许系统向用户发送");
+    public Message sendMessage(Long senderId,
+                               Long receiverId,
+                               String title,
+                               String content,
+                               MessageType type,
+                               Long contractId,
+                               Long houseId,
+                               Long requestId,
+                               boolean requireAction) {
+        if (receiverId == null || receiverId.equals(SYSTEM_ID)) {
+            throw new RuntimeException("接收方不能为空且不能是系统");
         }
-        Account receiver = receiverId != null ? accountRepository.findById(receiverId)
-                .filter(account -> account.getAccountType() == AccountType.USER)
-                .orElseThrow(() -> new RuntimeException("接收方不存在")) : null;
+
+        Account sender = null;
+        if (senderId != null && !senderId.equals(SYSTEM_ID)) {
+            sender = accountRepository.findById(senderId)
+                    .orElseThrow(() -> new RuntimeException("发送方不存在"));
+        }
+
+        Account receiver = accountRepository.findById(receiverId)
+                .orElseThrow(() -> new RuntimeException("接收方不存在"));
 
         Message message = new Message();
         message.setSender(sender);
@@ -69,142 +81,22 @@ public class MessageService {
         return messageRepository.save(message);
     }
 
-    public Message sendOperatorMessage(Long senderOperatorId, Long receiverOperatorId, String title, String content,
-                                       MessageType type, Long contractId, Long requestId, boolean requireAction) {
-        return sendOperatorMessage(senderOperatorId, receiverOperatorId, title, content, type, contractId, null, requestId, requireAction);
-    }
-
-    public Message sendOperatorMessage(Long senderOperatorId, Long receiverOperatorId, String title, String content,
-                                       MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        Account sender = senderOperatorId != null
-                ? accountRepository.findById(senderOperatorId)
-                .orElse(null)
-                : null;
-        Account receiver = receiverOperatorId != null
-                ? accountRepository.findById(receiverOperatorId)
-                .orElseThrow(() -> new RuntimeException("接收业务账号不存在"))
-                : null;
-        if (sender != null && sender.getAccountType() == AccountType.USER) {
-            throw new RuntimeException("发送方必须是管理员/业务员");
-        }
-        if (receiver != null && receiver.getAccountType() == AccountType.USER) {
-            throw new RuntimeException("接收方必须是管理员/业务员");
-        }
-
-        Message message = new Message();
-        message.setSenderOperatorId(sender != null ? sender.getId() : null);
-        message.setSenderOperatorName(sender != null ? sender.getDisplayName() : SYSTEM_NAME);
-        message.setReceiverOperatorId(receiver != null ? receiver.getId() : null);
-        message.setReceiverOperatorName(receiver != null ? receiver.getDisplayName() : null);
-        message.setTitle(title);
-        message.setContent(content);
-        message.setType(type);
-        message.setRelatedContractId(contractId);
-        message.setRelatedHouseId(houseId);
-        message.setRelatedRequestId(requestId);
-        message.setRequireAction(requireAction);
-        if (Boolean.TRUE.equals(requireAction)) {
-            message.setStatus(MessageStatus.PENDING);
-        }
-        return messageRepository.save(message);
-    }
-
-    public Message sendOperatorToUserMessage(Long senderOperatorId, Long receiverUserId, String title, String content,
-                                             MessageType type, Long contractId, Long requestId, boolean requireAction) {
-        return sendOperatorToUserMessage(senderOperatorId, receiverUserId, title, content, type, contractId, null, requestId, requireAction);
-    }
-
-    public Message sendOperatorToUserMessage(Long senderOperatorId, Long receiverUserId, String title, String content,
-                                             MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        if (receiverUserId != null && receiverUserId.equals(SYSTEM_ID)) {
-            throw new RuntimeException("不能向系统发送消息");
-        }
-        Account sender = senderOperatorId != null
-                ? accountRepository.findById(senderOperatorId)
-                .orElseThrow(() -> new RuntimeException("发送方业务账号不存在"))
-                : null;
-        if (sender != null && sender.getAccountType() == AccountType.USER) {
-            throw new RuntimeException("发送方必须是管理员/业务员");
-        }
-        Account receiver = receiverUserId != null
-                ? accountRepository.findById(receiverUserId)
-                .filter(account -> account.getAccountType() == AccountType.USER)
-                .orElseThrow(() -> new RuntimeException("接收方不存在"))
-                : null;
-
-        Message message = new Message();
-        message.setSenderOperatorId(sender != null ? sender.getId() : null);
-        message.setSenderOperatorName(sender != null ? sender.getDisplayName() : SYSTEM_NAME);
-        message.setReceiver(receiver);
-        message.setTitle(title);
-        message.setContent(content);
-        message.setType(type);
-        message.setRelatedContractId(contractId);
-        message.setRelatedHouseId(houseId);
-        message.setRelatedRequestId(requestId);
-        message.setRequireAction(requireAction);
-        if (Boolean.TRUE.equals(requireAction)) {
-            message.setStatus(MessageStatus.PENDING);
-        }
-        return messageRepository.save(message);
-    }
-
-    public Message sendUserToOperatorMessage(Long senderUserId, Long receiverOperatorId, String title, String content,
-                                             MessageType type, Long contractId, Long requestId, boolean requireAction) {
-        return sendUserToOperatorMessage(senderUserId, receiverOperatorId, title, content, type, contractId, null, requestId, requireAction);
-    }
-
-    public Message sendUserToOperatorMessage(Long senderUserId, Long receiverOperatorId, String title, String content,
-                                             MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        if (receiverOperatorId == null) {
-            throw new RuntimeException("接收业务账号不能为空");
-        }
-        Account sender = senderUserId != null
-                ? accountRepository.findById(senderUserId)
-                .filter(account -> account.getAccountType() == AccountType.USER)
-                .orElseThrow(() -> new RuntimeException("发送方用户不存在"))
-                : null;
-        Account receiver = accountRepository.findById(receiverOperatorId)
-                .orElseThrow(() -> new RuntimeException("接收业务账号不存在"));
-        if (receiver.getAccountType() == AccountType.USER) {
-            throw new RuntimeException("接收方必须是管理员/业务员");
-        }
-
-        Message message = new Message();
-        message.setSender(sender);
-        message.setReceiverOperatorId(receiver.getId());
-        message.setReceiverOperatorName(receiver.getDisplayName());
-        message.setTitle(title);
-        message.setContent(content);
-        message.setType(type);
-        message.setRelatedContractId(contractId);
-        message.setRelatedHouseId(houseId);
-        message.setRelatedRequestId(requestId);
-        message.setRequireAction(requireAction);
-        if (Boolean.TRUE.equals(requireAction)) {
-            message.setStatus(MessageStatus.PENDING);
-        }
-        return messageRepository.save(message);
-    }
-
-    public List<MessageDTO> getMessages(Long userId) {
-        return messageRepository.findByReceiverIdOrderByCreatedAtDesc(userId)
+    public List<MessageDTO> getMessages(Long accountId) {
+        return messageRepository.findByReceiverIdOrderByCreatedAtDesc(accountId)
                 .stream()
                 .map(this::convert)
                 .collect(Collectors.toList());
     }
 
-    public List<MessageDTO> getOperatorMessages(Long operatorId) {
-        return messageRepository.findByReceiverOperatorIdOrderByCreatedAtDesc(operatorId)
-                .stream()
-                .map(this::convert)
-                .collect(Collectors.toList());
-    }
+    public List<MessageDTO> getMessageContacts(Long accountId) {
+        Account account = requireAccount(accountId);
+        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(accountId);
+        if (account.getAccountType() == AccountType.USER) {
+            messages = messages.stream().filter(msg -> !isArchivedForUser(msg, accountId)).toList();
+        }
 
-    public List<MessageDTO> getOperatorMessageContacts(Long operatorId) {
-        List<Message> messages = messageRepository.findBySenderOperatorIdOrReceiverOperatorIdOrderByCreatedAtDesc(operatorId);
         Map<String, List<Message>> grouped = messages.stream()
-                .collect(Collectors.groupingBy(msg -> buildContactKey(resolveOperatorContactRef(msg, operatorId))));
+                .collect(Collectors.groupingBy(msg -> buildContactKey(resolveContactRef(msg, accountId))));
 
         return grouped.entrySet().stream()
                 .map(entry -> {
@@ -215,7 +107,7 @@ public class MessageService {
                         return null;
                     }
                     long unreadCount = list.stream()
-                            .filter(msg -> msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(operatorId))
+                            .filter(msg -> msg.getReceiver() != null && msg.getReceiver().getId().equals(accountId))
                             .filter(msg -> msg.getStatus() == MessageStatus.UNREAD)
                             .count();
                     MessageDTO dto = convert(latest);
@@ -230,76 +122,37 @@ public class MessageService {
                 .collect(Collectors.toList());
     }
 
-    public List<MessageDTO> getMessageContacts(Long userId) {
-        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(userId);
-        Map<String, List<Message>> groupedMessages = messages.stream()
-                .filter(msg -> !isArchivedForUser(msg, userId))
-                .collect(Collectors.groupingBy(msg -> buildContactKey(resolveUserContactRef(msg, userId))));
-
-        return groupedMessages.entrySet().stream()
-                .map(entry -> {
-                    ContactRef ref = parseContactKey(entry.getKey());
-                    Message latestMessage = entry.getValue().stream()
-                            .max(Comparator.comparing(Message::getCreatedAt))
-                            .orElse(null);
-                    if (latestMessage == null) {
-                        return null;
-                    }
-                    long unreadCount = entry.getValue().stream()
-                            .filter(msg -> msg.getReceiver() != null && msg.getReceiver().getId().equals(userId))
-                            .filter(msg -> msg.getStatus() == MessageStatus.UNREAD)
-                            .count();
-                    MessageDTO dto = convert(latestMessage);
-                    dto.setUnreadCount(unreadCount);
-                    dto.setContactType(ref.type());
-                    dto.setContactId(ref.id());
-                    dto.setContactKey(entry.getKey());
-                    return dto;
-                })
-                .filter(dto -> dto != null)
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .collect(Collectors.toList());
+    public List<MessageDTO> getChatMessages(Long accountId, Long contactId) {
+        return getChatMessages(accountId, contactId, null);
     }
 
-    public List<MessageDTO> getChatMessages(Long userId, Long contactId) {
-        return getChatMessages(userId, contactId, null);
-    }
-
-    public List<MessageDTO> getChatMessages(Long userId, Long contactId, String contactType) {
-        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(userId);
+    public List<MessageDTO> getChatMessages(Long accountId, Long contactId, String contactType) {
+        Account account = requireAccount(accountId);
+        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(accountId);
 
         List<Message> chatMessages;
         if (isSystemContact(contactId, contactType)) {
             chatMessages = messages.stream()
                     .filter(msg -> msg.getSender() == null
-                            && msg.getSenderOperatorId() == null
                             && msg.getReceiver() != null
-                            && msg.getReceiver().getId().equals(userId))
-                    .filter(msg -> !isArchivedForUser(msg, userId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        } else if (CONTACT_USER.equalsIgnoreCase(contactType)) {
-            chatMessages = messages.stream()
-                    .filter(msg -> isUserUserPair(msg, userId, contactId))
-                    .filter(msg -> !isArchivedForUser(msg, userId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        } else if (CONTACT_OPERATOR.equalsIgnoreCase(contactType)) {
-            chatMessages = messages.stream()
-                    .filter(msg -> isUserOperatorPair(msg, userId, contactId))
-                    .filter(msg -> !isArchivedForUser(msg, userId))
+                            && msg.getReceiver().getId().equals(accountId))
                     .sorted(Comparator.comparing(Message::getCreatedAt))
                     .collect(Collectors.toList());
         } else {
             chatMessages = messages.stream()
-                    .filter(msg -> isUserUserPair(msg, userId, contactId) || isUserOperatorPair(msg, userId, contactId))
-                    .filter(msg -> !isArchivedForUser(msg, userId))
+                    .filter(msg -> isAccountPair(msg, accountId, contactId))
+                    .filter(msg -> matchContactType(msg, accountId, contactType))
                     .sorted(Comparator.comparing(Message::getCreatedAt))
                     .collect(Collectors.toList());
         }
 
+        if (account.getAccountType() == AccountType.USER) {
+            chatMessages = chatMessages.stream().filter(msg -> !isArchivedForUser(msg, accountId)).toList();
+        }
+
         List<Message> unreadMessages = chatMessages.stream()
-                .filter(msg -> msg.getReceiver() != null && msg.getReceiver().getId().equals(userId)
+                .filter(msg -> msg.getReceiver() != null
+                        && msg.getReceiver().getId().equals(accountId)
                         && msg.getStatus() == MessageStatus.UNREAD)
                 .toList();
 
@@ -314,76 +167,21 @@ public class MessageService {
         return chatMessages.stream().map(this::convert).collect(Collectors.toList());
     }
 
-    public List<MessageDTO> getOperatorChatMessages(Long operatorId, Long contactId) {
-        return getOperatorChatMessages(operatorId, contactId, null);
+    public long getUnreadMessageCount(Long accountId) {
+        return messageRepository.countByReceiverIdAndStatus(accountId, MessageStatus.UNREAD);
     }
 
-    public List<MessageDTO> getOperatorChatMessages(Long operatorId, Long contactId, String contactType) {
-        List<Message> messages = messageRepository.findBySenderOperatorIdOrReceiverOperatorIdOrderByCreatedAtDesc(operatorId);
-
-        List<Message> chatMessages;
-        if (isSystemContact(contactId, contactType)) {
-            chatMessages = messages.stream()
-                    .filter(msg -> msg.getSenderOperatorId() == null
-                            && msg.getSender() == null
-                            && msg.getReceiverOperatorId() != null
-                            && msg.getReceiverOperatorId().equals(operatorId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        } else if (CONTACT_OPERATOR.equalsIgnoreCase(contactType)) {
-            chatMessages = messages.stream()
-                    .filter(msg -> isOperatorOperatorPair(msg, operatorId, contactId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        } else if (CONTACT_USER.equalsIgnoreCase(contactType)) {
-            chatMessages = messages.stream()
-                    .filter(msg -> isOperatorUserPair(msg, operatorId, contactId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        } else {
-            chatMessages = messages.stream()
-                    .filter(msg -> isOperatorOperatorPair(msg, operatorId, contactId) || isOperatorUserPair(msg, operatorId, contactId))
-                    .sorted(Comparator.comparing(Message::getCreatedAt))
-                    .collect(Collectors.toList());
-        }
-
-        List<Message> unreadMessages = chatMessages.stream()
-                .filter(msg -> msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(operatorId)
-                        && msg.getStatus() == MessageStatus.UNREAD)
-                .toList();
-
-        for (Message message : unreadMessages) {
-            message.setStatus(MessageStatus.READ);
-            message.setReadAt(LocalDateTime.now());
-        }
-        if (!unreadMessages.isEmpty()) {
-            messageRepository.saveAll(unreadMessages);
-        }
-
-        return chatMessages.stream().map(this::convert).collect(Collectors.toList());
-    }
-
-    public long getUnreadMessageCount(Long userId) {
-        return messageRepository.countByReceiverIdAndStatus(userId, MessageStatus.UNREAD);
-    }
-
-    public long getOperatorUnreadMessageCount(Long operatorId) {
-        return messageRepository.countByReceiverOperatorIdAndStatus(operatorId, MessageStatus.UNREAD);
-    }
-
-    public List<MessageDTO> getAdminMessages(Long operatorId) {
-        Account account = accountRepository.findById(operatorId)
-                .orElseThrow(() -> new RuntimeException("账号不存在"));
+    public List<MessageDTO> getAdminMessages(Long accountId) {
+        Account account = requireAccount(accountId);
         if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
-        return getOperatorMessages(operatorId);
+        return getMessages(accountId);
     }
 
-    public void markAsRead(Long messageId, Long userId, Long operatorId) {
-        Message message = messageRepository.findById(messageId)
-                .orElseThrow(() -> new RuntimeException("消息不存在"));
-        if (!canOperateMessage(message, userId, operatorId)) {
+    public void markAsRead(Long messageId, Long accountId) {
+        Message message = requireMessage(messageId);
+        if (!canOperateMessage(message, accountId)) {
             throw new RuntimeException("无权操作该消息");
         }
         message.setStatus(MessageStatus.READ);
@@ -391,32 +189,27 @@ public class MessageService {
         messageRepository.save(message);
     }
 
-    public void updateMessageStatus(Long messageId, Long userId, Long operatorId, MessageStatus status) {
-        Message message = messageRepository.findById(messageId)
-                .orElseThrow(() -> new RuntimeException("消息不存在"));
-        if (!canOperateMessage(message, userId, operatorId)) {
+    public void updateMessageStatus(Long messageId, Long accountId, MessageStatus status) {
+        Message message = requireMessage(messageId);
+        if (!canOperateMessage(message, accountId)) {
             throw new RuntimeException("无权操作该消息");
         }
         message.setStatus(status);
+        if (status == MessageStatus.READ && message.getReadAt() == null) {
+            message.setReadAt(LocalDateTime.now());
+        }
         messageRepository.save(message);
     }
 
-    public void markAllAsRead(Long userId) {
-        List<Message> unreadMessages = messageRepository.findByReceiverIdAndStatus(userId, MessageStatus.UNREAD);
+    public void markAllAsRead(Long accountId) {
+        List<Message> unreadMessages = messageRepository.findByReceiverIdAndStatus(accountId, MessageStatus.UNREAD);
         for (Message message : unreadMessages) {
             message.setStatus(MessageStatus.READ);
             message.setReadAt(LocalDateTime.now());
         }
-        messageRepository.saveAll(unreadMessages);
-    }
-
-    public void markAllOperatorMessagesAsRead(Long operatorId) {
-        List<Message> unreadMessages = messageRepository.findByReceiverOperatorIdAndStatus(operatorId, MessageStatus.UNREAD);
-        for (Message message : unreadMessages) {
-            message.setStatus(MessageStatus.READ);
-            message.setReadAt(LocalDateTime.now());
+        if (!unreadMessages.isEmpty()) {
+            messageRepository.saveAll(unreadMessages);
         }
-        messageRepository.saveAll(unreadMessages);
     }
 
     public void archiveContactMessages(Long userId, Long contactId) {
@@ -424,31 +217,18 @@ public class MessageService {
     }
 
     public void archiveContactMessages(Long userId, Long contactId, String contactType) {
+        Account user = requireAccount(userId);
+        if (user.getAccountType() != AccountType.USER) {
+            throw new RuntimeException("仅普通用户支持会话归档");
+        }
+        if (contactId == null || contactId.equals(SYSTEM_ID)) {
+            throw new RuntimeException("系统会话不可归档");
+        }
+
         List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(userId);
         List<Message> contactMessages = messages.stream()
-                .filter(msg -> {
-                    Long senderId = msg.getSender() != null ? msg.getSender().getId() : null;
-                    Long receiverId = msg.getReceiver() != null ? msg.getReceiver().getId() : null;
-                    if (contactId.equals(SYSTEM_ID)) {
-                        return false;
-                    }
-                    if (CONTACT_OPERATOR.equalsIgnoreCase(contactType)) {
-                        return (msg.getSenderOperatorId() != null && msg.getSenderOperatorId().equals(contactId) &&
-                                receiverId != null && receiverId.equals(userId)) ||
-                                (senderId != null && senderId.equals(userId) &&
-                                        msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(contactId));
-                    }
-                    if (CONTACT_USER.equalsIgnoreCase(contactType)) {
-                        return (senderId != null && senderId.equals(contactId) && receiverId != null && receiverId.equals(userId)) ||
-                                (senderId != null && senderId.equals(userId) && receiverId != null && receiverId.equals(contactId));
-                    }
-                    return (senderId != null && senderId.equals(contactId) && receiverId != null && receiverId.equals(userId)) ||
-                            (senderId != null && senderId.equals(userId) && receiverId != null && receiverId.equals(contactId)) ||
-                            ((msg.getSenderOperatorId() != null && msg.getSenderOperatorId().equals(contactId) &&
-                                    receiverId != null && receiverId.equals(userId)) ||
-                                    (senderId != null && senderId.equals(userId) &&
-                                            msg.getReceiverOperatorId() != null && msg.getReceiverOperatorId().equals(contactId)));
-                })
+                .filter(msg -> isAccountPair(msg, userId, contactId))
+                .filter(msg -> matchContactType(msg, userId, contactType))
                 .collect(Collectors.toList());
 
         for (Message message : contactMessages) {
@@ -458,6 +238,149 @@ public class MessageService {
         if (!contactMessages.isEmpty()) {
             messageRepository.saveAll(contactMessages);
         }
+    }
+
+    public void notifyAdmins(String title, String content, Long contractId, Long requestId, boolean requireAction) {
+        notifyAdmins(title, content, contractId, null, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
+    }
+
+    public void notifyAdmins(String title, String content, Long contractId, Long houseId, Long requestId, boolean requireAction) {
+        notifyAdmins(title, content, contractId, houseId, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
+    }
+
+    public void notifyAdmins(String title,
+                             String content,
+                             Long contractId,
+                             Long houseId,
+                             Long requestId,
+                             boolean requireAction,
+                             MessageType type) {
+        accountRepository.findByAccountTypeAndEnabled(AccountType.ADMIN, true)
+                .forEach(admin -> sendMessage(null, admin.getId(), title, content, type, contractId, houseId, requestId, requireAction));
+    }
+
+    public void notifyStaff(Long staffAccountId,
+                            String title,
+                            String content,
+                            Long contractId,
+                            Long requestId,
+                            boolean requireAction,
+                            MessageType type) {
+        notifyStaff(staffAccountId, title, content, contractId, null, requestId, requireAction, type);
+    }
+
+    public void notifyStaff(Long staffAccountId,
+                            String title,
+                            String content,
+                            Long contractId,
+                            Long houseId,
+                            Long requestId,
+                            boolean requireAction,
+                            MessageType type) {
+        if (staffAccountId == null) {
+            throw new RuntimeException("业务员账号不能为空");
+        }
+        Account staff = requireAccount(staffAccountId);
+        if (staff.getAccountType() != AccountType.STAFF) {
+            throw new RuntimeException("仅可向业务员发送此类消息");
+        }
+        sendMessage(null, staffAccountId, title, content, type, contractId, houseId, requestId, requireAction);
+    }
+
+    private Account requireAccount(Long accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("账号不存在"));
+    }
+
+    private Message requireMessage(Long messageId) {
+        return messageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("消息不存在"));
+    }
+
+    private boolean isAccountPair(Message message, Long accountId, Long contactId) {
+        Long senderId = message.getSender() != null ? message.getSender().getId() : null;
+        Long receiverId = message.getReceiver() != null ? message.getReceiver().getId() : null;
+        return (senderId != null && senderId.equals(accountId) && receiverId != null && receiverId.equals(contactId))
+                || (senderId != null && senderId.equals(contactId) && receiverId != null && receiverId.equals(accountId));
+    }
+
+    private boolean matchContactType(Message message, Long accountId, String contactType) {
+        if (contactType == null || contactType.isBlank()) {
+            return true;
+        }
+        if (CONTACT_SYSTEM.equalsIgnoreCase(contactType)) {
+            return isSystemContact(null, contactType);
+        }
+        Account contact = resolveContactAccount(message, accountId);
+        if (contact == null || contact.getAccountType() == null) {
+            return false;
+        }
+        return contact.getAccountType().name().equalsIgnoreCase(contactType);
+    }
+
+    private boolean canOperateMessage(Message message, Long accountId) {
+        if (accountId == null) {
+            throw new RuntimeException("未识别当前账号");
+        }
+        return message.getReceiver() != null && message.getReceiver().getId().equals(accountId);
+    }
+
+    private ContactRef resolveContactRef(Message message, Long currentAccountId) {
+        if (message.getSender() == null && message.getReceiver() != null && message.getReceiver().getId().equals(currentAccountId)) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+
+        Account contact = resolveContactAccount(message, currentAccountId);
+        if (contact == null) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+        String type = contact.getAccountType() == null ? CONTACT_SYSTEM : contact.getAccountType().name();
+        return new ContactRef(type, contact.getId());
+    }
+
+    private Account resolveContactAccount(Message message, Long currentAccountId) {
+        if (message.getSender() != null && message.getSender().getId().equals(currentAccountId)) {
+            return message.getReceiver();
+        }
+        if (message.getReceiver() != null && message.getReceiver().getId().equals(currentAccountId)) {
+            return message.getSender();
+        }
+        return null;
+    }
+
+    private String buildContactKey(ContactRef ref) {
+        return ref.type() + ":" + ref.id();
+    }
+
+    private ContactRef parseContactKey(String contactKey) {
+        if (contactKey == null || !contactKey.contains(":")) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+
+        String[] parts = contactKey.split(":", 2);
+        String type = parts[0];
+        Long id;
+        try {
+            id = Long.parseLong(parts[1]);
+        } catch (NumberFormatException ex) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+
+        if (CONTACT_SYSTEM.equalsIgnoreCase(type)) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+
+        if (type == null || type.isBlank()) {
+            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
+        }
+        return new ContactRef(type.toUpperCase(), id);
+    }
+
+    private boolean isSystemContact(Long contactId, String contactType) {
+        if (contactId != null && contactId.equals(SYSTEM_ID)) {
+            return true;
+        }
+        return CONTACT_SYSTEM.equalsIgnoreCase(contactType);
     }
 
     private void addArchivedUserId(Message message, Long userId) {
@@ -485,115 +408,6 @@ public class MessageService {
         return ids;
     }
 
-    private boolean canOperateMessage(Message message, Long userId, Long operatorId) {
-        if (userId == null && operatorId == null) {
-            throw new RuntimeException("未识别当前账号");
-        }
-        if (userId != null) {
-            return message.getReceiver() != null && message.getReceiver().getId().equals(userId);
-        }
-        return message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(operatorId);
-    }
-
-    private ContactRef resolveUserContactRef(Message message, Long userId) {
-        if (message.getSender() != null && message.getSender().getId().equals(userId)) {
-            if (message.getReceiver() != null) {
-                return new ContactRef(CONTACT_USER, message.getReceiver().getId());
-            }
-            if (message.getReceiverOperatorId() != null) {
-                return new ContactRef(CONTACT_OPERATOR, message.getReceiverOperatorId());
-            }
-            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-        }
-        if (message.getSender() != null) {
-            return new ContactRef(CONTACT_USER, message.getSender().getId());
-        }
-        if (message.getSenderOperatorId() != null) {
-            return new ContactRef(CONTACT_OPERATOR, message.getSenderOperatorId());
-        }
-        return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-    }
-
-    private ContactRef resolveOperatorContactRef(Message message, Long operatorId) {
-        if (message.getSenderOperatorId() != null && message.getSenderOperatorId().equals(operatorId)) {
-            if (message.getReceiver() != null) {
-                return new ContactRef(CONTACT_USER, message.getReceiver().getId());
-            }
-            if (message.getReceiverOperatorId() != null) {
-                return new ContactRef(CONTACT_OPERATOR, message.getReceiverOperatorId());
-            }
-            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-        }
-        if (message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(operatorId)) {
-            if (message.getSender() != null) {
-                return new ContactRef(CONTACT_USER, message.getSender().getId());
-            }
-            if (message.getSenderOperatorId() != null) {
-                return new ContactRef(CONTACT_OPERATOR, message.getSenderOperatorId());
-            }
-            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-        }
-        return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-    }
-
-    private String buildContactKey(ContactRef ref) {
-        return ref.type() + ":" + ref.id();
-    }
-
-    private ContactRef parseContactKey(String contactKey) {
-        if (contactKey == null || !contactKey.contains(":")) {
-            return new ContactRef(CONTACT_SYSTEM, SYSTEM_ID);
-        }
-        String[] parts = contactKey.split(":", 2);
-        String type = parts[0];
-        Long id;
-        try {
-            id = Long.parseLong(parts[1]);
-        } catch (NumberFormatException e) {
-            id = SYSTEM_ID;
-        }
-        if (!CONTACT_USER.equals(type) && !CONTACT_OPERATOR.equals(type) && !CONTACT_SYSTEM.equals(type)) {
-            type = CONTACT_SYSTEM;
-            id = SYSTEM_ID;
-        }
-        return new ContactRef(type, id);
-    }
-
-    private boolean isSystemContact(Long contactId, String contactType) {
-        if (contactId != null && contactId.equals(SYSTEM_ID)) {
-            return true;
-        }
-        return CONTACT_SYSTEM.equalsIgnoreCase(contactType);
-    }
-
-    private boolean isUserUserPair(Message message, Long userId, Long contactId) {
-        return (message.getSender() != null && message.getSender().getId().equals(contactId) &&
-                message.getReceiver() != null && message.getReceiver().getId().equals(userId)) ||
-                (message.getSender() != null && message.getSender().getId().equals(userId) &&
-                        message.getReceiver() != null && message.getReceiver().getId().equals(contactId));
-    }
-
-    private boolean isUserOperatorPair(Message message, Long userId, Long contactId) {
-        return (message.getSenderOperatorId() != null && message.getSenderOperatorId().equals(contactId) &&
-                message.getReceiver() != null && message.getReceiver().getId().equals(userId)) ||
-                (message.getSender() != null && message.getSender().getId().equals(userId) &&
-                        message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(contactId));
-    }
-
-    private boolean isOperatorOperatorPair(Message message, Long operatorId, Long contactId) {
-        return (message.getSenderOperatorId() != null && message.getSenderOperatorId().equals(contactId) &&
-                message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(operatorId)) ||
-                (message.getSenderOperatorId() != null && message.getSenderOperatorId().equals(operatorId) &&
-                        message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(contactId));
-    }
-
-    private boolean isOperatorUserPair(Message message, Long operatorId, Long contactId) {
-        return (message.getSenderOperatorId() != null && message.getSenderOperatorId().equals(operatorId) &&
-                message.getReceiver() != null && message.getReceiver().getId().equals(contactId)) ||
-                (message.getSender() != null && message.getSender().getId().equals(contactId) &&
-                        message.getReceiverOperatorId() != null && message.getReceiverOperatorId().equals(operatorId));
-    }
-
     private MessageDTO convert(Message message) {
         MessageDTO dto = new MessageDTO();
         dto.setId(message.getId());
@@ -601,29 +415,23 @@ public class MessageService {
         dto.setContent(message.getContent());
         dto.setType(message.getType());
         dto.setStatus(message.getStatus());
+
         if (message.getSender() != null) {
             dto.setSenderId(message.getSender().getId());
-            dto.setSenderName(message.getSender().getRealName());
+            dto.setSenderName(displayNameOf(message.getSender()));
+            dto.setSenderType(message.getSender().getAccountType() == null ? null : message.getSender().getAccountType().name());
         } else {
-            if (message.getSenderOperatorId() != null) {
-                dto.setSenderId(message.getSenderOperatorId());
-                dto.setSenderName(message.getSenderOperatorName() == null ? SYSTEM_NAME : message.getSenderOperatorName());
-            } else {
-                dto.setSenderId(SYSTEM_ID);
-                dto.setSenderName(SYSTEM_NAME);
-            }
+            dto.setSenderId(SYSTEM_ID);
+            dto.setSenderName(SYSTEM_NAME);
+            dto.setSenderType(CONTACT_SYSTEM);
         }
+
         if (message.getReceiver() != null) {
             dto.setReceiverId(message.getReceiver().getId());
-            dto.setReceiverName(message.getReceiver().getRealName());
-        } else if (message.getReceiverOperatorId() != null) {
-            dto.setReceiverId(message.getReceiverOperatorId());
-            dto.setReceiverName(message.getReceiverOperatorName());
+            dto.setReceiverName(displayNameOf(message.getReceiver()));
+            dto.setReceiverType(message.getReceiver().getAccountType() == null ? null : message.getReceiver().getAccountType().name());
         }
-        dto.setSenderOperatorId(message.getSenderOperatorId());
-        dto.setSenderOperatorName(message.getSenderOperatorName());
-        dto.setReceiverOperatorId(message.getReceiverOperatorId());
-        dto.setReceiverOperatorName(message.getReceiverOperatorName());
+
         dto.setRelatedContractId(message.getRelatedContractId());
         dto.setRelatedHouseId(message.getRelatedHouseId());
         dto.setRelatedRequestId(message.getRelatedRequestId());
@@ -633,34 +441,16 @@ public class MessageService {
         return dto;
     }
 
-    public void notifyAdmins(String title, String content, Long contractId, Long requestId, boolean requireAction) {
-        notifyAdmins(title, content, contractId, null, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
+    private String displayNameOf(Account account) {
+        if (account.getDisplayName() != null && !account.getDisplayName().isBlank()) {
+            return account.getDisplayName();
+        }
+        if (account.getRealName() != null && !account.getRealName().isBlank()) {
+            return account.getRealName();
+        }
+        return account.getUsername();
     }
 
-    public void notifyAdmins(String title, String content, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        notifyAdmins(title, content, contractId, houseId, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
+    private record ContactRef(String type, Long id) {
     }
-
-    public void notifyAdmins(String title,
-                             String content,
-                             Long contractId,
-                             Long houseId,
-                             Long requestId,
-                             boolean requireAction,
-                             MessageType type) {
-        accountRepository.findByAccountTypeAndEnabled(AccountType.ADMIN, true).forEach(admin ->
-                sendOperatorMessage(null, admin.getId(), title, content,
-                        type, contractId, houseId, requestId, requireAction)
-        );
-    }
-
-    public void notifyStaff(Long staffOperatorId, String title, String content, Long contractId, Long requestId, boolean requireAction, MessageType type) {
-        notifyStaff(staffOperatorId, title, content, contractId, null, requestId, requireAction, type);
-    }
-
-    public void notifyStaff(Long staffOperatorId, String title, String content, Long contractId, Long houseId, Long requestId, boolean requireAction, MessageType type) {
-        sendOperatorMessage(null, staffOperatorId, title, content, type, contractId, houseId, requestId, requireAction);
-    }
-
-    private record ContactRef(String type, Long id) {}
 }

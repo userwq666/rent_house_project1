@@ -165,12 +165,15 @@ import MessageActionCard from '../components/MessageActionCard.vue'
 const route = useRoute()
 const router = useRouter()
 
-const principalType = sessionStorage.getItem('principalType') || 'USER'
-const userType = sessionStorage.getItem('userType') || 'USER'
-const isOperator = principalType === 'OPERATOR' || userType === 'ADMIN' || userType === 'STAFF'
-const isAdmin = isOperator && userType === 'ADMIN'
-const isStaff = isOperator && userType === 'STAFF'
-const currentPrincipalId = Number(sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') || '0')
+const accountType = String(sessionStorage.getItem('accountType') || sessionStorage.getItem('userType') || 'USER').toUpperCase()
+const isOperator = accountType === 'ADMIN' || accountType === 'STAFF'
+const isAdmin = accountType === 'ADMIN'
+const isStaff = accountType === 'STAFF'
+const currentPrincipalId = Number(
+  sessionStorage.getItem('accountId') ||
+    sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') ||
+    '0'
+)
 
 const contacts = ref([])
 const chatMessages = ref([])
@@ -227,14 +230,12 @@ const getContactType = (contact) => {
 
   const contactId = getContactId(contact)
   if (contactId === SYSTEM_ID) return 'SYSTEM'
-
-  if (
-    (typeof contact.senderOperatorId === 'number' && contact.senderOperatorId === contactId) ||
-    (typeof contact.receiverOperatorId === 'number' && contact.receiverOperatorId === contactId)
-  ) {
-    return 'OPERATOR'
+  if (Number(contact.senderId) === contactId && contact.senderType) {
+    return String(contact.senderType).toUpperCase()
   }
-
+  if (Number(contact.receiverId) === contactId && contact.receiverType) {
+    return String(contact.receiverType).toUpperCase()
+  }
   return 'USER'
 }
 
@@ -251,13 +252,13 @@ const getContactName = (contact) => {
   if (getContactType(contact) === 'SYSTEM') return '系统消息'
 
   if (isSentMessage(contact)) {
-    return contact.receiverName || contact.receiverOperatorName || contact.senderName || '未知联系人'
+    return contact.receiverName || contact.senderName || '未知联系人'
   }
-  return contact.senderName || contact.senderOperatorName || contact.receiverName || '未知联系人'
+  return contact.senderName || contact.receiverName || '未知联系人'
 }
 
 const isSentMessage = (message) => {
-  return message.senderId === currentPrincipalId || message.senderOperatorId === currentPrincipalId
+  return message.senderId === currentPrincipalId
 }
 
 const updateUnreadCountCache = (list) => {
@@ -692,8 +693,8 @@ const addContact = async () => {
       return
     }
 
-    const targetType = String(data.principalType || '').toUpperCase() === 'OPERATOR' ? 'OPERATOR' : 'USER'
-    const targetId = targetType === 'OPERATOR' ? data.operatorId : data.userId
+    const targetType = String(data.accountType || 'USER').toUpperCase()
+    const targetId = Number(data.accountId)
 
     if (!targetId) {
       ElMessage.error('无法识别联系人ID')
@@ -713,10 +714,9 @@ const addContact = async () => {
       id: `temp-${targetType}-${targetId}`,
       contactType: targetType,
       contactId: targetId,
-      senderId: targetType === 'USER' ? targetId : null,
-      senderOperatorId: targetType === 'OPERATOR' ? targetId : null,
+      senderId: targetId,
+      senderType: targetType,
       senderName: displayName,
-      senderOperatorName: displayName,
       content: '点击开始聊天',
       createdAt: new Date().toISOString(),
       unreadCount: 0
@@ -763,13 +763,8 @@ const sendMessage = async () => {
 
     const payload = {
       title: '聊天消息',
-      content: newMessage.value
-    }
-
-    if (contactType === 'OPERATOR') {
-      payload.receiverOperatorId = contactId
-    } else {
-      payload.receiverId = contactId
+      content: newMessage.value,
+      receiverId: contactId
     }
 
     await sendApiMessage(payload)
@@ -827,10 +822,9 @@ const handleReceiverIdParam = async () => {
       id: `temp-${receiverType}-${receiverId}`,
       contactType: receiverType,
       contactId: Number(receiverId),
-      senderId: receiverType === 'USER' ? Number(receiverId) : null,
-      senderOperatorId: receiverType === 'OPERATOR' ? Number(receiverId) : null,
+      senderId: Number(receiverId),
+      senderType: receiverType,
       senderName: receiverName || '对方',
-      senderOperatorName: receiverName || '对方',
       content: '点击开始聊天',
       createdAt: new Date().toISOString(),
       unreadCount: 0

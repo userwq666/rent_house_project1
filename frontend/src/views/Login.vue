@@ -82,35 +82,31 @@ const handleLogin = async () => {
 
     const { data } = await login(loginForm.value)
 
-    console.log('登录响应:', data)
-
     if (data.token) {
+      const accountId = Number(data.accountId)
+      const accountType = String(data.accountType || 'USER').toUpperCase()
       sessionStorage.setItem('token', data.token)
-      sessionStorage.setItem('userId', data.userId)
-      sessionStorage.setItem('operatorId', data.operatorId || '')
+      sessionStorage.setItem('accountId', String(accountId))
+      sessionStorage.setItem('accountType', accountType)
+      sessionStorage.setItem('userId', accountType === 'USER' ? String(accountId) : '')
+      sessionStorage.setItem('operatorId', accountType === 'USER' ? '' : String(accountId))
       sessionStorage.setItem('username', data.username)
-      sessionStorage.setItem('userType', data.userType)
-      sessionStorage.setItem('principalType', data.principalType || 'USER')
-      
+      sessionStorage.setItem('userType', accountType)
+
       ElMessage.success(data.message || '登录成功')
-      
-      console.log('用户类型:', data.userType)
-      
-      if (data.userType === 'ADMIN') {
-        console.log('管理员登录，跳转至后台')
+
+      if (accountType === 'ADMIN') {
         router.push('/admin')
-      } else if (data.userType === 'STAFF') {
+      } else if (accountType === 'STAFF') {
         router.push('/staff')
       } else {
         const redirectPath = route.query.redirect || '/home'
-        console.log('普通用户登录，跳转至:', redirectPath)
         router.push(redirectPath)
       }
     } else {
       ElMessage.error(data.message || '登录失败')
     }
   } catch (error) {
-    console.error('登录错误:', error)
     ElMessage.error(error.response?.data?.message || '登录失败，请检查用户名和密码')
   } finally {
     loading.value = false

@@ -195,8 +195,8 @@ const activeTab = ref('all')
 const allContracts = ref([])
 const landlordContracts = ref([])
 const tenantContracts = ref([])
-const currentUserId = Number(sessionStorage.getItem('userId'))
-const userType = sessionStorage.getItem('userType')
+const currentUserId = Number(sessionStorage.getItem('accountId') || sessionStorage.getItem('userId'))
+const userType = sessionStorage.getItem('accountType') || sessionStorage.getItem('userType')
 const isStaff = userType === 'STAFF'
 
 // 定时刷新合同状态（每 5 秒）

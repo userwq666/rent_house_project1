@@ -15,12 +15,10 @@ public class MessageDTO {
     private MessageStatus status;
     private Long senderId;
     private String senderName;
+    private String senderType;
     private Long receiverId;
     private String receiverName;
-    private Long senderOperatorId;
-    private String senderOperatorName;
-    private Long receiverOperatorId;
-    private String receiverOperatorName;
+    private String receiverType;
     private Long relatedContractId;
     private Long relatedHouseId;
     private Long relatedRequestId;

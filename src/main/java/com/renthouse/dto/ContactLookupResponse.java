@@ -4,11 +4,9 @@ import lombok.Data;
 
 @Data
 public class ContactLookupResponse {
-    private String principalType; // USER / OPERATOR
-    private Long userId;
-    private Long operatorId;
+    private Long accountId;
+    private String accountType;
     private String username;
     private String displayName;
     private String phone;
 }
-

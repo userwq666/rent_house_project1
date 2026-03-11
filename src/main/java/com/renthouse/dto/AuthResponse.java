@@ -9,18 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AuthResponse {
     private String token;
-    private Long userId;
-    private Long operatorId;
+    private Long accountId;
     private String username;
-    private String userType;
-    private String principalType;
+    private String accountType;
     private String message;
-
-    public AuthResponse(String token, Long userId, String username, String userType, String message) {
-        this(token, userId, null, username, userType, "USER", message);
-    }
-
-    public static AuthResponse operator(String token, Long operatorId, String username, String userType, String message) {
-        return new AuthResponse(token, null, operatorId, username, userType, "OPERATOR", message);
-    }
 }

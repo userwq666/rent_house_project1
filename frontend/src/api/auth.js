@@ -54,17 +54,7 @@ export function updateProfile(data) {
 }
 
 /**
- * 根据用户名获取用户信息
- */
-export function getUserInfo(username) {
-  return request({
-    url: `/api/auth/user/${encodeURIComponent(username)}`,
-    method: 'get'
-  })
-}
-
-/**
- * 统一查询联系人（支持 USER/OPERATOR）
+ * 统一查询联系人
  */
 export function lookupContact(username) {
   return request({

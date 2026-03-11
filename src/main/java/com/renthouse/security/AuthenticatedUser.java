@@ -21,16 +21,4 @@ public class AuthenticatedUser {
     public AccountType getAccountType() {
         return accountType;
     }
-
-    public Long getUserId() {
-        return accountType == AccountType.USER ? accountId : null;
-    }
-
-    public Long getOperatorId() {
-        return accountType == AccountType.USER ? null : accountId;
-    }
-
-    public boolean isOperator() {
-        return accountType != null && accountType != AccountType.USER;
-    }
 }

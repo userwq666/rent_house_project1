@@ -125,7 +125,7 @@ const searchForm = reactive({
 const auth = reactive({
   token: sessionStorage.getItem('token'),
   username: sessionStorage.getItem('username'),
-  userType: sessionStorage.getItem('userType')
+  userType: sessionStorage.getItem('accountType') || sessionStorage.getItem('userType')
 })
 
 const isLoggedIn = computed(() => !!auth.token)
@@ -133,7 +133,7 @@ const isLoggedIn = computed(() => !!auth.token)
 const syncAuth = () => {
   auth.token = sessionStorage.getItem('token')
   auth.username = sessionStorage.getItem('username')
-  auth.userType = sessionStorage.getItem('userType')
+  auth.userType = sessionStorage.getItem('accountType') || sessionStorage.getItem('userType')
 }
 
 // 获取未读消息数

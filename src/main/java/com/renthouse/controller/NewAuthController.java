@@ -1,7 +1,12 @@
 package com.renthouse.controller;
 
 import com.renthouse.domain.Account;
-import com.renthouse.dto.*;
+import com.renthouse.dto.AuthResponse;
+import com.renthouse.dto.ContactLookupResponse;
+import com.renthouse.dto.LoginRequest;
+import com.renthouse.dto.UpdateProfileRequest;
+import com.renthouse.dto.UserProfileResponse;
+import com.renthouse.dto.UserRegisterRequest;
 import com.renthouse.enums.AccountType;
 import com.renthouse.service.AccountService;
 import com.renthouse.service.OperatorAccountService;
@@ -32,25 +37,29 @@ public class NewAuthController {
     public ResponseEntity<?> register(@RequestBody UserRegisterRequest request) {
         try {
             AccountType targetType = parseTargetType(request.getAccountType());
-            if (targetType != AccountType.USER) {
+            if (targetType == AccountType.ADMIN) {
+                throw new RuntimeException("不允许直接注册管理员");
+            }
+            if (targetType == AccountType.STAFF) {
                 Long operatorId = AuthUtil.getCurrentOperatorId();
                 operatorAccountService.requireAdmin(operatorId);
             }
 
             Account account = accountService.register(request, targetType);
-            String principalType = principalTypeOf(account.getAccountType());
             return ResponseEntity.ok(new AuthResponse(
                     null,
-                    principalType.equals("USER") ? account.getId() : null,
-                    principalType.equals("OPERATOR") ? account.getId() : null,
+                    account.getId(),
                     account.getUsername(),
                     account.getAccountType().name(),
-                    principalType,
                     "注册成功"
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new AuthResponse(
-                    null, null, null, null, null, null, "注册失败: " + e.getMessage()
+                    null,
+                    null,
+                    null,
+                    null,
+                    "注册失败: " + e.getMessage()
             ));
         }
     }
@@ -63,31 +72,28 @@ public class NewAuthController {
 
             if (!Boolean.TRUE.equals(account.getEnabled())) {
                 return ResponseEntity.badRequest().body(new AuthResponse(
-                        null, null, null, null, null, null, "账号已被禁用"
+                        null, null, null, null, "账号已被禁用"
                 ));
             }
 
             if (!accountService.validatePassword(request.getPassword(), account.getPassword())) {
                 return ResponseEntity.badRequest().body(new AuthResponse(
-                        null, null, null, null, null, null, "用户名或密码错误"
+                        null, null, null, null, "用户名或密码错误"
                 ));
             }
 
             String token = jwtUtil.generateToken(account.getId(), account.getAccountType());
-            String principalType = principalTypeOf(account.getAccountType());
 
             return ResponseEntity.ok(new AuthResponse(
                     token,
-                    principalType.equals("USER") ? account.getId() : null,
-                    principalType.equals("OPERATOR") ? account.getId() : null,
+                    account.getId(),
                     account.getUsername(),
                     account.getAccountType().name(),
-                    principalType,
                     "登录成功"
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new AuthResponse(
-                    null, null, null, null, null, null, "登录失败: " + e.getMessage()
+                    null, null, null, null, "登录失败: " + e.getMessage()
             ));
         }
     }
@@ -98,17 +104,7 @@ public class NewAuthController {
             Long accountId = AuthUtil.getCurrentAccountId();
             Account account = accountService.findById(accountId)
                     .orElseThrow(() -> new RuntimeException("账号不存在"));
-
-            Map<String, Object> result = new HashMap<>();
-            String principalType = principalTypeOf(account.getAccountType());
-            result.put("principalType", principalType);
-            result.put("account", toSafeAccount(account));
-            if ("USER".equals(principalType)) {
-                result.put("user", toSafeAccount(account));
-            } else {
-                result.put("operator", toSafeAccount(account));
-            }
-            return ResponseEntity.ok(result);
+            return ResponseEntity.ok(toSafeAccount(account));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("获取用户信息失败: " + e.getMessage());
         }
@@ -117,7 +113,7 @@ public class NewAuthController {
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile() {
         try {
-            Long accountId = AuthUtil.getCurrentUserId();
+            Long accountId = AuthUtil.getCurrentAccountId();
             Account account = accountService.findById(accountId)
                     .orElseThrow(() -> new RuntimeException("用户不存在"));
             return ResponseEntity.ok(toProfileResponse(account));
@@ -129,7 +125,7 @@ public class NewAuthController {
     @PutMapping("/profile")
     public ResponseEntity<?> updateProfile(@RequestBody UpdateProfileRequest request) {
         try {
-            Long accountId = AuthUtil.getCurrentUserId();
+            Long accountId = AuthUtil.getCurrentAccountId();
             Account account = accountService.updateProfile(
                     accountId,
                     request.getRealName(),
@@ -162,40 +158,14 @@ public class NewAuthController {
                     .orElseThrow(() -> new RuntimeException("联系人不存在"));
 
             ContactLookupResponse resp = new ContactLookupResponse();
-            resp.setPrincipalType(principalTypeOf(account.getAccountType()));
-            if (account.getAccountType() == AccountType.USER) {
-                resp.setUserId(account.getId());
-            } else {
-                resp.setOperatorId(account.getId());
-            }
+            resp.setAccountId(account.getId());
+            resp.setAccountType(account.getAccountType().name());
             resp.setUsername(account.getUsername());
             resp.setDisplayName(displayNameOf(account));
             resp.setPhone(account.getPhone());
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("获取联系人失败: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/user/{username}")
-    public ResponseEntity<?> getUserInfoByUsername(@PathVariable String username) {
-        try {
-            Long currentUserId = AuthUtil.getCurrentUserId();
-            Account current = accountService.findById(currentUserId)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
-            if (current.getUsername().equals(username)) {
-                return ResponseEntity.badRequest().body("不能添加自己为联系人");
-            }
-
-            Account account = accountService.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
-            if (account.getAccountType() != AccountType.USER) {
-                throw new RuntimeException("该账号不是普通用户");
-            }
-
-            return ResponseEntity.ok(toProfileResponse(account));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("获取用户信息失败: " + e.getMessage());
         }
     }
 
@@ -210,10 +180,6 @@ public class NewAuthController {
         }
     }
 
-    private String principalTypeOf(AccountType accountType) {
-        return accountType == AccountType.USER ? "USER" : "OPERATOR";
-    }
-
     private String displayNameOf(Account account) {
         if (account.getDisplayName() != null && !account.getDisplayName().isBlank()) {
             return account.getDisplayName();
@@ -226,6 +192,7 @@ public class NewAuthController {
 
     private Map<String, Object> toSafeAccount(Account account) {
         Map<String, Object> map = new HashMap<>();
+        map.put("accountId", account.getId());
         map.put("id", account.getId());
         map.put("username", account.getUsername());
         map.put("accountType", account.getAccountType().name());
@@ -242,7 +209,6 @@ public class NewAuthController {
 
     private UserProfileResponse toProfileResponse(Account account) {
         return new UserProfileResponse(
-                account.getId(),
                 account.getId(),
                 account.getUsername(),
                 account.getAccountType().name(),

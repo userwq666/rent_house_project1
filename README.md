@@ -104,7 +104,7 @@ npm run dev
 
 ### 消息中心
 - `GET /api/messages/contacts`
-- `GET /api/messages/chat/{contactId}?contactType=USER|OPERATOR|SYSTEM`
+- `GET /api/messages/chat/{contactId}?contactType=USER|STAFF|ADMIN|SYSTEM`
 - `POST /api/messages`
 - `POST /api/messages/{id}/status`
 

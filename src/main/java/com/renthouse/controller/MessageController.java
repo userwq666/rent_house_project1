@@ -21,32 +21,11 @@ public class MessageController {
 
     private static final Long SYSTEM_ID = -1L;
 
-    private PrincipalContext resolvePrincipal() {
-        try {
-            return new PrincipalContext(AuthUtil.getCurrentUserId(), null);
-        } catch (Exception ignored) {
-            return new PrincipalContext(null, AuthUtil.getCurrentOperatorId());
-        }
-    }
-
-    private static class PrincipalContext {
-        private final Long userId;
-        private final Long operatorId;
-
-        private PrincipalContext(Long userId, Long operatorId) {
-            this.userId = userId;
-            this.operatorId = operatorId;
-        }
-    }
-
     @GetMapping
     public ResponseEntity<?> getMyMessages() {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            if (principal.userId != null) {
-                return ResponseEntity.ok(messageService.getMessages(principal.userId));
-            }
-            return ResponseEntity.ok(messageService.getOperatorMessages(principal.operatorId));
+            Long accountId = AuthUtil.getCurrentAccountId();
+            return ResponseEntity.ok(messageService.getMessages(accountId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -55,11 +34,8 @@ public class MessageController {
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadMessageCount() {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            if (principal.userId != null) {
-                return ResponseEntity.ok(messageService.getUnreadMessageCount(principal.userId));
-            }
-            return ResponseEntity.ok(messageService.getOperatorUnreadMessageCount(principal.operatorId));
+            Long accountId = AuthUtil.getCurrentAccountId();
+            return ResponseEntity.ok(messageService.getUnreadMessageCount(accountId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -68,11 +44,8 @@ public class MessageController {
     @GetMapping("/contacts")
     public ResponseEntity<?> getMessageContacts() {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            if (principal.userId != null) {
-                return ResponseEntity.ok(messageService.getMessageContacts(principal.userId));
-            }
-            return ResponseEntity.ok(messageService.getOperatorMessageContacts(principal.operatorId));
+            Long accountId = AuthUtil.getCurrentAccountId();
+            return ResponseEntity.ok(messageService.getMessageContacts(accountId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -82,11 +55,8 @@ public class MessageController {
     public ResponseEntity<?> getChatMessages(@PathVariable Long contactId,
                                              @RequestParam(required = false) String contactType) {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            if (principal.userId != null) {
-                return ResponseEntity.ok(messageService.getChatMessages(principal.userId, contactId, contactType));
-            }
-            return ResponseEntity.ok(messageService.getOperatorChatMessages(principal.operatorId, contactId, contactType));
+            Long accountId = AuthUtil.getCurrentAccountId();
+            return ResponseEntity.ok(messageService.getChatMessages(accountId, contactId, contactType));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -95,8 +65,8 @@ public class MessageController {
     @PostMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@PathVariable Long id) {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            messageService.markAsRead(id, principal.userId, principal.operatorId);
+            Long accountId = AuthUtil.getCurrentAccountId();
+            messageService.markAsRead(id, accountId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -111,8 +81,8 @@ public class MessageController {
                 return ResponseEntity.badRequest().body("状态不能为空");
             }
             MessageStatus status = MessageStatus.valueOf(statusStr);
-            PrincipalContext principal = resolvePrincipal();
-            messageService.updateMessageStatus(id, principal.userId, principal.operatorId, status);
+            Long accountId = AuthUtil.getCurrentAccountId();
+            messageService.updateMessageStatus(id, accountId, status);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -122,12 +92,8 @@ public class MessageController {
     @PostMapping("/read-all")
     public ResponseEntity<?> markAllAsRead() {
         try {
-            PrincipalContext principal = resolvePrincipal();
-            if (principal.userId != null) {
-                messageService.markAllAsRead(principal.userId);
-            } else {
-                messageService.markAllOperatorMessagesAsRead(principal.operatorId);
-            }
+            Long accountId = AuthUtil.getCurrentAccountId();
+            messageService.markAllAsRead(accountId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -137,72 +103,25 @@ public class MessageController {
     @PostMapping
     public ResponseEntity<?> sendMessage(@RequestBody SendMessageRequest request) {
         try {
-            PrincipalContext principal = resolvePrincipal();
+            Long accountId = AuthUtil.getCurrentAccountId();
             Long receiverId = request.getReceiverId();
-            Long receiverOperatorId = request.getReceiverOperatorId();
-            if (receiverId == null && receiverOperatorId == null) {
+            if (receiverId == null) {
                 return ResponseEntity.badRequest().body("接收方不能为空");
             }
-
-            if (principal.userId != null) {
-                if (receiverOperatorId != null) {
-                    messageService.sendUserToOperatorMessage(
-                            principal.userId,
-                            receiverOperatorId,
-                            request.getTitle(),
-                            request.getContent(),
-                            MessageType.USER_CHAT,
-                            null,
-                            null,
-                            false
-                    );
-                } else {
-                    if (SYSTEM_ID.equals(receiverId)) {
-                        return ResponseEntity.badRequest().body("不能向系统发送消息");
-                    }
-                    messageService.sendMessage(
-                            principal.userId,
-                            receiverId,
-                            request.getTitle(),
-                            request.getContent(),
-                            MessageType.USER_CHAT,
-                            null,
-                            null,
-                            false
-                    );
-                }
-                return ResponseEntity.ok().build();
+            if (SYSTEM_ID.equals(receiverId)) {
+                return ResponseEntity.badRequest().body("不能向系统发送消息");
             }
 
-            if (receiverOperatorId != null) {
-                if (SYSTEM_ID.equals(receiverOperatorId)) {
-                    return ResponseEntity.badRequest().body("不能向系统发送消息");
-                }
-                messageService.sendOperatorMessage(
-                        principal.operatorId,
-                        receiverOperatorId,
-                        request.getTitle(),
-                        request.getContent(),
-                        MessageType.USER_CHAT,
-                        null,
-                        null,
-                        false
-                );
-            } else {
-                if (SYSTEM_ID.equals(receiverId)) {
-                    return ResponseEntity.badRequest().body("不能向系统发送消息");
-                }
-                messageService.sendOperatorToUserMessage(
-                        principal.operatorId,
-                        receiverId,
-                        request.getTitle(),
-                        request.getContent(),
-                        MessageType.USER_CHAT,
-                        null,
-                        null,
-                        false
-                );
-            }
+            messageService.sendMessage(
+                    accountId,
+                    receiverId,
+                    request.getTitle(),
+                    request.getContent(),
+                    MessageType.USER_CHAT,
+                    null,
+                    null,
+                    false
+            );
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -212,8 +131,8 @@ public class MessageController {
     @GetMapping("/admin")
     public ResponseEntity<?> getAdminMessages() {
         try {
-            Long operatorId = AuthUtil.getCurrentOperatorId();
-            return ResponseEntity.ok(messageService.getAdminMessages(operatorId));
+            Long accountId = AuthUtil.getCurrentAccountId();
+            return ResponseEntity.ok(messageService.getAdminMessages(accountId));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

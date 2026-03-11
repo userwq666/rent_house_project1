@@ -84,7 +84,7 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   const token = sessionStorage.getItem('token')
-  const userType = sessionStorage.getItem('userType')
+  const userType = sessionStorage.getItem('accountType') || sessionStorage.getItem('userType')
   
   console.log('路由守卫:', {
     to: to.path,

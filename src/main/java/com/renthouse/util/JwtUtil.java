@@ -28,14 +28,7 @@ public class JwtUtil {
         Map<String, Object> claims = new HashMap<>();
         claims.put("accountId", accountId);
         claims.put("accountType", accountType.name());
-        claims.put("principalType", accountType == AccountType.USER ? "USER" : "OPERATOR");
-        claims.put("userId", accountType == AccountType.USER ? accountId : null);
-        claims.put("operatorId", accountType == AccountType.USER ? null : accountId);
         return createToken(claims, String.valueOf(accountId));
-    }
-
-    public String extractPrincipalType(String token) {
-        return extractClaim(token, claims -> claims.get("principalType", String.class));
     }
 
     public Long extractAccountId(String token) {
@@ -44,15 +37,6 @@ public class JwtUtil {
 
     public String extractAccountType(String token) {
         return extractClaim(token, claims -> claims.get("accountType", String.class));
-    }
-
-    // Legacy readers kept for transitional frontend/session values.
-    public Long extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("userId", Long.class));
-    }
-
-    public Long extractOperatorId(String token) {
-        return extractClaim(token, claims -> claims.get("operatorId", Long.class));
     }
 
     public Date extractExpiration(String token) {

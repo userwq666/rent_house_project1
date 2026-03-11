@@ -65,9 +65,6 @@ public class AccountService {
     public Account updateProfile(Long accountId, String realName, String phone, String email, String idCard) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
-        if (account.getAccountType() != AccountType.USER) {
-            throw new RuntimeException("仅普通用户可编辑此资料");
-        }
         account.setRealName(realName);
         account.setDisplayName(realName);
         account.setPhone(phone);

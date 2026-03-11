@@ -89,7 +89,7 @@ import { getMyHouses, offlineHouse, onlineHouse, deleteHouse } from '../api/hous
 const router = useRouter()
 const houses = ref([])
 const loading = ref(false)
-const userType = sessionStorage.getItem('userType') || ''
+const userType = sessionStorage.getItem('accountType') || sessionStorage.getItem('userType') || ''
 
 // 如果是管理员，在路由层面就已经拦截，这里不再重复检查
 

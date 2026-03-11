@@ -167,7 +167,7 @@ const contractForm = reactive({
 })
 
 const isLoggedIn = computed(() => !!sessionStorage.getItem('token'))
-const currentUserId = computed(() => sessionStorage.getItem('userId'))
+const currentUserId = computed(() => sessionStorage.getItem('accountId') || sessionStorage.getItem('userId'))
 const isOwner = computed(() => house.value && house.value.ownerId == currentUserId.value)
 
 const fetchHouse = async () => {
@@ -207,7 +207,7 @@ const handleRent = async () => {
     rentLoading.value = true
     await createContract({
       houseId: house.value.id,
-      tenantId: Number(sessionStorage.getItem('userId')),
+      tenantId: Number(sessionStorage.getItem('accountId') || sessionStorage.getItem('userId')),
       rentPrice: Number(contractForm.rentPrice),
       deposit: Number(contractForm.deposit),
       startDate: contractForm.startDate,
