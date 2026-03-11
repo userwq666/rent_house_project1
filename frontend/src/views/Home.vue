@@ -49,7 +49,7 @@
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-input v-model="searchForm.keyword" placeholder="关键词搜索" :prefix-icon="Search" />
+          <el-input v-model="searchForm.keyword" placeholder="关键词 / #房源ID / id:房源ID" :prefix-icon="Search" />
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
@@ -58,6 +58,36 @@
             <el-option label="1000-2000" value="1000-2000" />
             <el-option label="2000-4000" value="2000-4000" />
             <el-option label="4000以上" value="4000-999999" />
+          </el-select>
+        </el-form-item>
+        <div class="divider">|</div>
+        <el-form-item>
+          <el-select v-model="searchForm.areaRange" placeholder="面积范围" style="width: 140px">
+            <el-option label="50㎡以下" value="0-50" />
+            <el-option label="50-80㎡" value="50-80" />
+            <el-option label="80-120㎡" value="80-120" />
+            <el-option label="120㎡以上" value="120-99999" />
+          </el-select>
+        </el-form-item>
+        <div class="divider">|</div>
+        <el-form-item>
+          <el-select v-model="searchForm.houseType" placeholder="户型" style="width: 120px">
+            <el-option label="一居室" value="1居" />
+            <el-option label="一室一厅" value="1室1厅" />
+            <el-option label="两室一厅" value="2室1厅" />
+            <el-option label="三室一厅" value="3室1厅" />
+            <el-option label="三室两厅" value="3室2厅" />
+            <el-option label="四室两厅" value="4室2厅" />
+          </el-select>
+        </el-form-item>
+        <div class="divider">|</div>
+        <el-form-item>
+          <el-select v-model="searchForm.sortBy" placeholder="排序" style="width: 140px">
+            <el-option label="最新发布" value="latest" />
+            <el-option label="租金从低到高" value="price_asc" />
+            <el-option label="租金从高到低" value="price_desc" />
+            <el-option label="面积从小到大" value="area_asc" />
+            <el-option label="面积从大到小" value="area_desc" />
           </el-select>
         </el-form-item>
         <el-button type="primary" class="glow" @click="handleSearch">搜索</el-button>
@@ -119,7 +149,10 @@ const unreadCount = ref(0)
 const searchForm = reactive({
   city: '',
   keyword: '',
-  priceRange: ''
+  priceRange: '',
+  areaRange: '',
+  houseType: '',
+  sortBy: 'latest'
 })
 
 const auth = reactive({
@@ -170,17 +203,28 @@ const handleSearch = async () => {
     loading.value = true
     let min = null
     let max = null
+    let minArea = null
+    let maxArea = null
     if (searchForm.priceRange) {
       const [a, b] = searchForm.priceRange.split('-')
       min = Number(a)
       max = Number(b)
+    }
+    if (searchForm.areaRange) {
+      const [a, b] = searchForm.areaRange.split('-')
+      minArea = Number(a)
+      maxArea = Number(b)
     }
     
     const { data } = await searchHouses({
       district: searchForm.city || null,
       minPrice: min,
       maxPrice: max,
-      keyword: searchForm.keyword || null
+      keyword: searchForm.keyword || null,
+      houseType: searchForm.houseType || null,
+      minArea,
+      maxArea,
+      sortBy: searchForm.sortBy || 'latest'
     })
     houses.value = data || []
   } catch (error) {
@@ -194,6 +238,9 @@ const handleReset = () => {
   searchForm.city = ''
   searchForm.keyword = ''
   searchForm.priceRange = ''
+  searchForm.areaRange = ''
+  searchForm.houseType = ''
+  searchForm.sortBy = 'latest'
   fetchHouses()
 }
 

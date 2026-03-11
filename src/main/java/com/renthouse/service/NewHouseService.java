@@ -23,13 +23,18 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class NewHouseService {
 
     private static final int MAX_IMAGES = 4;
+    private static final Pattern HOUSE_ID_KEYWORD_PATTERN =
+            Pattern.compile("^(?:#|id\\s*:)\\s*(\\d+)$", Pattern.CASE_INSENSITIVE);
 
     @Autowired
     private HouseRepository houseRepository;
@@ -53,9 +58,36 @@ public class NewHouseService {
                 .toList();
     }
 
-    public List<HouseDTO> searchHouses(String district, BigDecimal minPrice, BigDecimal maxPrice) {
-        return houseRepository.searchHouses(HouseStatus.AVAILABLE, district, minPrice, maxPrice)
-                .stream()
+    public List<HouseDTO> searchHouses(String district,
+                                       BigDecimal minPrice,
+                                       BigDecimal maxPrice,
+                                       String keyword,
+                                       String houseType,
+                                       BigDecimal minArea,
+                                       BigDecimal maxArea,
+                                       String sortBy) {
+        KeywordCriteria keywordCriteria = parseKeywordCriteria(keyword);
+
+        if (keywordCriteria.exactHouseId() != null) {
+            return houseRepository.findById(keywordCriteria.exactHouseId())
+                    .stream()
+                    .filter(house -> house.getStatus() == HouseStatus.AVAILABLE)
+                    .map(this::convertToDTO)
+                    .toList();
+        }
+
+        List<House> houses = houseRepository.searchHouses(
+                HouseStatus.AVAILABLE,
+                normalize(district),
+                minPrice,
+                maxPrice,
+                normalize(houseType),
+                minArea,
+                maxArea,
+                keywordCriteria.textKeyword()
+        );
+
+        return sortHouses(houses, sortBy).stream()
                 .map(this::convertToDTO)
                 .toList();
     }
@@ -365,6 +397,50 @@ public class NewHouseService {
         ));
     }
 
+    private KeywordCriteria parseKeywordCriteria(String keyword) {
+        String normalized = normalize(keyword);
+        if (normalized == null) {
+            return new KeywordCriteria(null, null);
+        }
+
+        Matcher matcher = HOUSE_ID_KEYWORD_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            try {
+                return new KeywordCriteria(Long.parseLong(matcher.group(1)), null);
+            } catch (NumberFormatException ignored) {
+                return new KeywordCriteria(null, normalized);
+            }
+        }
+        return new KeywordCriteria(null, normalized);
+    }
+
+    private List<House> sortHouses(List<House> houses, String sortBy) {
+        String normalizedSort = normalize(sortBy);
+        Comparator<House> comparator;
+
+        if ("price_asc".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(House::getRentPrice, Comparator.nullsLast(BigDecimal::compareTo));
+        } else if ("price_desc".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(House::getRentPrice, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+        } else if ("area_asc".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(House::getArea, Comparator.nullsLast(BigDecimal::compareTo));
+        } else if ("area_desc".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(House::getArea, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+        } else {
+            comparator = Comparator.comparing(House::getCreatedAt, Comparator.nullsLast(LocalDateTime::compareTo)).reversed();
+        }
+
+        return houses.stream().sorted(comparator).toList();
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private String displayName(Account account) {
         if (account == null) {
             return "未知";
@@ -453,5 +529,8 @@ public class NewHouseService {
             throw new RuntimeException("图片保存失败: " + e.getMessage());
         }
         return "/uploads/houses/" + houseId + "/gallery/" + fileName;
+    }
+
+    private record KeywordCriteria(Long exactHouseId, String textKeyword) {
     }
 }

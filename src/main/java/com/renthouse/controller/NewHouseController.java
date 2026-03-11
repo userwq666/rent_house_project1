@@ -29,8 +29,15 @@ public class NewHouseController {
     public ResponseEntity<List<HouseDTO>> searchHouses(
             @RequestParam(required = false) String district,
             @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice) {
-        return ResponseEntity.ok(houseService.searchHouses(district, minPrice, maxPrice));
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String houseType,
+            @RequestParam(required = false) BigDecimal minArea,
+            @RequestParam(required = false) BigDecimal maxArea,
+            @RequestParam(required = false) String sortBy) {
+        return ResponseEntity.ok(houseService.searchHouses(
+                district, minPrice, maxPrice, keyword, houseType, minArea, maxArea, sortBy
+        ));
     }
 
     @GetMapping("/{id}")

@@ -102,6 +102,13 @@ npm run dev
 - `PUT /api/houses/{id}/staff/approve`
 - `PUT /api/houses/{id}/staff/reject`
 
+### 房源搜索
+- `GET /api/houses/search`
+  - 支持参数：`district`、`minPrice`、`maxPrice`、`houseType`、`minArea`、`maxArea`、`sortBy`
+  - `keyword` 规则：
+    - 普通关键词：匹配 `title/address/district/description/facilities`
+    - 精确ID：`#123` 或 `id:123`（直接按房源ID匹配）
+
 ### 消息中心
 - `GET /api/messages/contacts`
 - `GET /api/messages/chat/{contactId}?contactType=USER|STAFF|ADMIN|SYSTEM`

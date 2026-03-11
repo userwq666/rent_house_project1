@@ -53,6 +53,11 @@ npm run dev
 2. 业务员通过：`AVAILABLE`
 3. 业务员驳回：`OFFLINE`
 
+首页搜索筛选规则：
+- 筛选参数：`district / priceRange / areaRange / houseType / sortBy`
+- 关键词默认检索：`title/address/district/description/facilities`
+- 当关键词为 `#数字` 或 `id:数字` 时，按房源ID精确匹配
+
 ### 4.2 合同流程
 
 1. 租客发起申请：`PENDING_LANDLORD_APPROVAL`

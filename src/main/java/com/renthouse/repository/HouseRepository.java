@@ -35,9 +35,22 @@ public interface HouseRepository extends JpaRepository<House, Long> {
     @Query("SELECT h FROM House h WHERE h.status = :status " +
            "AND (:district IS NULL OR h.district LIKE %:district%) " +
            "AND (:minPrice IS NULL OR h.rentPrice >= :minPrice) " +
-           "AND (:maxPrice IS NULL OR h.rentPrice <= :maxPrice)")
+           "AND (:maxPrice IS NULL OR h.rentPrice <= :maxPrice) " +
+           "AND (:houseType IS NULL OR h.houseType = :houseType) " +
+           "AND (:minArea IS NULL OR h.area >= :minArea) " +
+           "AND (:maxArea IS NULL OR h.area <= :maxArea) " +
+           "AND (:keyword IS NULL " +
+           "OR LOWER(h.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(h.address) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(COALESCE(h.district, '')) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(COALESCE(h.description, '')) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(COALESCE(h.facilities, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     List<House> searchHouses(@Param("status") HouseStatus status,
                             @Param("district") String district,
                             @Param("minPrice") BigDecimal minPrice,
-                            @Param("maxPrice") BigDecimal maxPrice);
+                            @Param("maxPrice") BigDecimal maxPrice,
+                            @Param("houseType") String houseType,
+                            @Param("minArea") BigDecimal minArea,
+                            @Param("maxArea") BigDecimal maxArea,
+                            @Param("keyword") String keyword);
 }
