@@ -40,6 +40,18 @@ public class Message {
     @Column(name = "receiver_operator_name", length = 80)
     private String receiverOperatorName;
 
+    @Column(name = "sender_principal_type", length = 20)
+    private String senderPrincipalType;
+
+    @Column(name = "sender_principal_id")
+    private Long senderPrincipalId;
+
+    @Column(name = "receiver_principal_type", length = 20)
+    private String receiverPrincipalType;
+
+    @Column(name = "receiver_principal_id")
+    private Long receiverPrincipalId;
+
     @Column(length = 200)
     private String title;
 

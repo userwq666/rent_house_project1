@@ -233,7 +233,7 @@ const goChatWithOwner = () => {
     ElMessage.warning('未找到房主信息')
     return
   }
-  router.push({ path: '/messages', query: { receiverId: house.value.ownerId } })
+  router.push({ path: '/messages', query: { receiverId: house.value.ownerId, receiverType: 'USER' } })
 }
 
 const getStatusText = (status) => {

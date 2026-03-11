@@ -4,8 +4,9 @@
     <div class="orb orb-b"></div>
     <div class="register-container glass">
       <div class="card-header">
-        <h2>创建账号</h2>
-        <p>以统一的简约体验开始租房之旅</p>
+        <h2>{{ isStaffRegister ? '创建业务员账号' : '创建账号' }}</h2>
+        <p>{{ isStaffRegister ? '通过标准注册流程新增业务员账号' : '以统一的简约体验开始租房之旅' }}</p>
+        <span v-if="isStaffRegister" class="mode-chip">管理员专用</span>
       </div>
 
       <el-form ref="registerFormRef" :model="registerForm" :rules="rules" label-width="80px" class="register-form">
@@ -27,26 +28,31 @@
           />
         </el-form-item>
 
-        <el-form-item label="真实姓名" prop="realName">
-          <el-input v-model="registerForm.realName" placeholder="请输入真实姓名" />
+        <el-form-item :label="isStaffRegister ? '姓名' : '真实姓名'" prop="realName">
+          <el-input v-model="registerForm.realName" :placeholder="isStaffRegister ? '请输入业务员姓名' : '请输入真实姓名'" />
         </el-form-item>
 
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="registerForm.phone" placeholder="请输入手机号" :prefix-icon="Phone" />
         </el-form-item>
 
-        <el-form-item label="邮箱" prop="email">
+        <el-form-item v-if="!isStaffRegister" label="邮箱" prop="email">
           <el-input v-model="registerForm.email" placeholder="请输入邮箱" :prefix-icon="Message" />
         </el-form-item>
 
-        <el-form-item label="身份证" prop="idCard">
+        <el-form-item v-if="!isStaffRegister" label="身份证" prop="idCard">
           <el-input v-model="registerForm.idCard" placeholder="请输入身份证号（可选）" />
         </el-form-item>
 
-        <el-button type="primary" :loading="loading" class="glow primary-btn" @click="handleRegister">注册</el-button>
+        <el-button type="primary" :loading="loading" class="glow primary-btn" @click="handleRegister">
+          {{ isStaffRegister ? '创建业务员账号' : '注册' }}
+        </el-button>
 
         <div class="actions">
-          <el-button text type="primary" @click="$router.push('/login')">已有账号？去登录</el-button>
+          <el-button v-if="isStaffRegister" text type="primary" @click="$router.push('/admin?tab=staff')">
+            返回业务员管理
+          </el-button>
+          <el-button v-else text type="primary" @click="$router.push('/login')">已有账号？去登录</el-button>
         </div>
       </el-form>
     </div>
@@ -54,15 +60,18 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Phone, Message } from '@element-plus/icons-vue'
 import { register } from '../api/auth'
+import { createStaff } from '../api/admin'
 
 const router = useRouter()
+const route = useRoute()
 const registerFormRef = ref(null)
 const loading = ref(false)
+const isStaffRegister = computed(() => route.query.mode === 'staff')
 
 const registerForm = reactive({
   username: '',
@@ -95,7 +104,7 @@ const rules = {
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
   ],
-  realName: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }],
+  realName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
@@ -110,6 +119,24 @@ const handleRegister = async () => {
   try {
     await registerFormRef.value.validate()
     loading.value = true
+
+    if (isStaffRegister.value) {
+      const userType = sessionStorage.getItem('userType')
+      if (userType !== 'ADMIN') {
+        ElMessage.error('仅管理员可创建业务员账号')
+        router.replace('/login')
+        return
+      }
+      await createStaff({
+        username: registerForm.username,
+        password: registerForm.password,
+        displayName: registerForm.realName,
+        phone: registerForm.phone
+      })
+      ElMessage.success('业务员创建成功')
+      router.push('/admin?tab=staff')
+      return
+    }
 
     const { data } = await register({
       username: registerForm.username,
@@ -127,11 +154,22 @@ const handleRegister = async () => {
       ElMessage.error(data.message || '注册失败')
     }
   } catch (error) {
-    ElMessage.error(error.response?.data?.message || '注册失败，请稍后重试')
+    // Element Plus 表单校验失败会抛出字段对象，这里不重复弹错误
+    if (!error?.response) {
+      return
+    }
+    ElMessage.error(error.response?.data?.message || (isStaffRegister.value ? '创建业务员失败，请稍后重试' : '注册失败，请稍后重试'))
   } finally {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  if (isStaffRegister.value && sessionStorage.getItem('userType') !== 'ADMIN') {
+    ElMessage.warning('仅管理员可访问业务员注册流程')
+    router.replace('/login')
+  }
+})
 </script>
 
 <style scoped>
@@ -223,6 +261,18 @@ const handleRegister = async () => {
   margin: 0;
   color: #666;
   font-size: 15px;
+}
+
+.mode-chip {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff6600;
+  background: rgba(255, 102, 0, 0.1);
+  border: 1px solid rgba(255, 102, 0, 0.25);
 }
 
 .register-form {

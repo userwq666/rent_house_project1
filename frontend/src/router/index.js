@@ -110,6 +110,16 @@ router.beforeEach((to, from, next) => {
   } else if (to.path === '/my-houses' && userType === 'STAFF') {
     ElMessage.warning('业务员不能访问我的房源页面')
     next('/staff')
+  } else if (to.path === '/register' && to.query.mode === 'staff') {
+    if (!token) {
+      ElMessage.warning('请先登录管理员账号')
+      next('/login')
+    } else if (userType !== 'ADMIN') {
+      ElMessage.warning('仅管理员可创建业务员账号')
+      next('/home')
+    } else {
+      next()
+    }
   } else if (to.path === '/login' && token) {
     console.log('已登录用户访问登录页，重定向')
     if (userType === 'ADMIN') next('/admin')

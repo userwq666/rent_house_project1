@@ -241,7 +241,7 @@ const openChat = (receiverId, receiverName) => {
     ElMessage.warning('缺少联系人信息')
     return
   }
-  router.push({ path: '/messages', query: { receiverId, receiverName } })
+  router.push({ path: '/messages', query: { receiverId, receiverName, receiverType: 'USER' } })
 }
 
 onMounted(loadData)

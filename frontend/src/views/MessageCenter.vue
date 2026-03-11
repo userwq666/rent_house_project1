@@ -171,6 +171,7 @@ const isOperator = principalType === 'OPERATOR' || userType === 'ADMIN' || userT
 const isAdmin = isOperator && userType === 'ADMIN'
 const isStaff = isOperator && userType === 'STAFF'
 const currentPrincipalId = Number(sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') || '0')
+const currentPrincipalType = isOperator ? 'OPERATOR' : 'USER'
 
 const contacts = ref([])
 const chatMessages = ref([])
@@ -195,12 +196,54 @@ const parseContactKey = (contactKey) => {
   const [type, idPart] = contactKey.split(':', 2)
   const id = Number(idPart)
   if (!Number.isFinite(id)) return null
-  return { type, id }
+  return { type: String(type || '').toUpperCase(), id }
+}
+
+const normalizePrincipalType = (type) => {
+  const normalized = String(type || '').toUpperCase()
+  return ['USER', 'OPERATOR', 'SYSTEM'].includes(normalized) ? normalized : null
+}
+
+const toNumberOrNull = (value) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+const getMessagePrincipal = (message, side) => {
+  const typeField = side === 'sender' ? 'senderPrincipalType' : 'receiverPrincipalType'
+  const idField = side === 'sender' ? 'senderPrincipalId' : 'receiverPrincipalId'
+  const fallbackUserField = side === 'sender' ? 'senderId' : 'receiverId'
+  const fallbackOperatorField = side === 'sender' ? 'senderOperatorId' : 'receiverOperatorId'
+
+  const explicitType = normalizePrincipalType(message?.[typeField])
+  const explicitId = toNumberOrNull(message?.[idField])
+  if (explicitType && explicitId !== null) {
+    return { type: explicitType, id: explicitId }
+  }
+
+  const operatorId = toNumberOrNull(message?.[fallbackOperatorField])
+  if (operatorId !== null) {
+    return { type: 'OPERATOR', id: operatorId }
+  }
+
+  const userId = toNumberOrNull(message?.[fallbackUserField])
+  if (userId !== null) {
+    return { type: userId === SYSTEM_ID ? 'SYSTEM' : 'USER', id: userId }
+  }
+
+  return null
+}
+
+const isCurrentPrincipal = (principal) => {
+  if (!principal) return false
+  return principal.type === currentPrincipalType && principal.id === currentPrincipalId
 }
 
 const getContactId = (contact) => {
   if (!contact) return null
-  if (typeof contact.contactId === 'number') return contact.contactId
+
+  const directId = toNumberOrNull(contact.contactId)
+  if (directId !== null) return directId
 
   const keyRef = parseContactKey(contact.contactKey)
   if (keyRef) return keyRef.id
@@ -212,28 +255,30 @@ const getContactId = (contact) => {
 
   if (contact.contactType === 'SYSTEM') return SYSTEM_ID
 
-  if (contact.senderId === currentPrincipalId) return contact.receiverId ?? contact.senderId
-  if (contact.senderId && contact.senderId !== currentPrincipalId) return contact.senderId
-  if (contact.receiverId && contact.receiverId !== currentPrincipalId) return contact.receiverId
+  const sender = getMessagePrincipal(contact, 'sender')
+  const receiver = getMessagePrincipal(contact, 'receiver')
+
+  if (isCurrentPrincipal(sender)) return receiver?.id ?? null
+  if (isCurrentPrincipal(receiver)) return sender?.id ?? null
+  if (sender?.id !== null && sender?.id !== undefined) return sender.id
+  if (receiver?.id !== null && receiver?.id !== undefined) return receiver.id
   return null
 }
 
 const getContactType = (contact) => {
   if (!contact) return null
-  if (contact.contactType) return String(contact.contactType).toUpperCase()
+  if (contact.contactType) return normalizePrincipalType(contact.contactType)
 
   const keyRef = parseContactKey(contact.contactKey)
-  if (keyRef) return keyRef.type
+  if (keyRef) return normalizePrincipalType(keyRef.type)
 
   const contactId = getContactId(contact)
   if (contactId === SYSTEM_ID) return 'SYSTEM'
 
-  if (
-    (typeof contact.senderOperatorId === 'number' && contact.senderOperatorId === contactId) ||
-    (typeof contact.receiverOperatorId === 'number' && contact.receiverOperatorId === contactId)
-  ) {
-    return 'OPERATOR'
-  }
+  const sender = getMessagePrincipal(contact, 'sender')
+  const receiver = getMessagePrincipal(contact, 'receiver')
+  if (sender?.id === contactId) return sender.type
+  if (receiver?.id === contactId) return receiver.type
 
   return 'USER'
 }
@@ -257,7 +302,7 @@ const getContactName = (contact) => {
 }
 
 const isSentMessage = (message) => {
-  return message.senderId === currentPrincipalId || message.senderOperatorId === currentPrincipalId
+  return isCurrentPrincipal(getMessagePrincipal(message, 'sender'))
 }
 
 const updateUnreadCountCache = (list) => {

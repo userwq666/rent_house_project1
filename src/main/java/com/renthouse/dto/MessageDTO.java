@@ -21,6 +21,10 @@ public class MessageDTO {
     private String senderOperatorName;
     private Long receiverOperatorId;
     private String receiverOperatorName;
+    private String senderPrincipalType;
+    private Long senderPrincipalId;
+    private String receiverPrincipalType;
+    private Long receiverPrincipalId;
     private Long relatedContractId;
     private Long relatedHouseId;
     private Long relatedRequestId;

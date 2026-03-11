@@ -174,23 +174,12 @@
         </el-tab-pane>
 
         <el-tab-pane label="业务员" name="staff">
-          <el-form :inline="true" class="staff-form">
-            <el-form-item label="用户名">
-              <el-input v-model="staffForm.username" placeholder="staff001" />
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="staffForm.password" placeholder="至少6位" show-password />
-            </el-form-item>
-            <el-form-item label="姓名">
-              <el-input v-model="staffForm.displayName" placeholder="业务员姓名" />
-            </el-form-item>
-            <el-form-item label="手机号">
-              <el-input v-model="staffForm.phone" placeholder="手机号" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="submitCreateStaff">新增业务员</el-button>
-            </el-form-item>
-          </el-form>
+          <div class="staff-register-entry">
+            <el-button class="staff-register-btn" type="primary" size="large" @click="openStaffRegister">
+              新增业务员
+            </el-button>
+            <p class="staff-register-tip">跳转到注册流程创建业务员账号</p>
+          </div>
 
           <el-table :data="staffList" v-loading="loading" style="width: 100%">
             <el-table-column prop="id" label="ID" width="80" />
@@ -226,25 +215,20 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAllHousesAdmin, deleteHouse } from '../api/house'
 import { getAllContracts, adminTerminateContract, approveContractByAdmin, rejectContractByAdmin, respondTermination } from '../api/contract'
-import { fetchAllUsers, updateUserRestrictions, updateUserStatus, fetchStaffList, createStaff, updateStaffStatus } from '../api/admin'
+import { fetchAllUsers, updateUserRestrictions, updateUserStatus, fetchStaffList, updateStaffStatus } from '../api/admin'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const activeTab = ref('houses')
 const houses = ref([])
 const contracts = ref([])
 const users = ref([])
 const staffList = ref([])
-const staffForm = reactive({
-  username: '',
-  password: '',
-  displayName: '',
-  phone: ''
-})
 
 // 定时刷新合同状态（每 5 秒）
 let contractRefreshInterval = null
@@ -321,6 +305,7 @@ const updateStats = () => {
 }
 
 const handleTabClick = () => {
+  router.replace({ path: '/admin', query: { tab: activeTab.value } })
   if (activeTab.value === 'houses') {
     fetchHouses()
   } else if (activeTab.value === 'contracts') {
@@ -330,6 +315,17 @@ const handleTabClick = () => {
   } else if (activeTab.value === 'staff') {
     fetchStaffs()
   }
+}
+
+const openStaffRegister = () => {
+  router.push({
+    path: '/register',
+    query: {
+      mode: 'staff',
+      from: 'admin',
+      tab: 'staff'
+    }
+  })
 }
 
 // 启动合同状态定时刷新
@@ -472,24 +468,6 @@ const handleStatusChange = async (row, value) => {
   }
 }
 
-const submitCreateStaff = async () => {
-  if (!staffForm.username || !staffForm.password) {
-    ElMessage.warning('请填写用户名和密码')
-    return
-  }
-  try {
-    await createStaff({ ...staffForm })
-    ElMessage.success('业务员创建成功')
-    staffForm.username = ''
-    staffForm.password = ''
-    staffForm.displayName = ''
-    staffForm.phone = ''
-    fetchStaffs()
-  } catch (error) {
-    ElMessage.error(error.response?.data || '创建失败')
-  }
-}
-
 const handleStaffStatusChange = async (row, value) => {
   try {
     await updateStaffStatus(row.id, { enabled: row.enabled })
@@ -555,6 +533,10 @@ const getContractStatusText = (status) => {
 }
 
 onMounted(() => {
+  const tab = route.query.tab
+  if (typeof tab === 'string' && ['houses', 'contracts', 'users', 'staff'].includes(tab)) {
+    activeTab.value = tab
+  }
   fetchHouses()
   fetchContracts()
   fetchUsers()
@@ -694,8 +676,60 @@ onUnmounted(() => {
   font-family: var(--font-main);
 }
 
-.staff-form {
-  margin-bottom: 16px;
+.staff-register-entry {
+  margin: 8px 0 22px;
+  padding: 28px 20px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff7ef 0%, #fff 100%);
+  border: 1px solid #ffd8b5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: fadeUpIn 0.45s ease;
+}
+
+.staff-register-btn {
+  min-width: 240px;
+  height: 52px;
+  border-radius: 999px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 22px rgba(255, 102, 0, 0.2);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  animation: pulseGlow 2.2s ease-in-out infinite;
+}
+
+.staff-register-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 14px 30px rgba(255, 102, 0, 0.28);
+}
+
+.staff-register-tip {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+@keyframes fadeUpIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 10px 22px rgba(255, 102, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 14px 28px rgba(255, 102, 0, 0.32);
+  }
 }
 
 /* 响应式优化 */
@@ -749,6 +783,10 @@ onUnmounted(() => {
   
   .panel {
     padding: 16px;
+  }
+
+  .staff-register-btn {
+    min-width: 100%;
   }
 }
 </style>
