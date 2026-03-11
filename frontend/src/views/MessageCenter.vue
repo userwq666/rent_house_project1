@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="message-center">
     <el-page-header @back="$router.push('/home')">
       <template #content>
@@ -7,7 +7,6 @@
     </el-page-header>
 
     <div class="chat-container">
-      <!-- 联系人列表 -->
       <div class="contact-list">
         <div class="list-header">
           <h3>{{ isOperator ? '待办消息' : '联系人' }}</h3>
@@ -18,12 +17,9 @@
             <el-button type="primary" link @click="loadContacts">刷新</el-button>
           </div>
         </div>
+
         <el-scrollbar class="contact-scroll">
-          <div
-            v-for="contact in contacts"
-            :key="getContactUnique(contact)"
-            class="contact-item-wrapper"
-          >
+          <div v-for="contact in contacts" :key="getContactUnique(contact)" class="contact-item-wrapper">
             <div class="contact-item-container">
               <div
                 class="contact-item"
@@ -31,17 +27,18 @@
                 @click="selectContact(contact)"
               >
                 <div class="contact-avatar">
-                  <el-avatar :size="40">{{ getContactName(contact).charAt(0) }}</el-avatar>
+                  <el-avatar :size="40">{{ getContactName(contact).charAt(0) || '?' }}</el-avatar>
                 </div>
                 <div class="contact-info">
                   <div class="contact-name">{{ getContactName(contact) }}</div>
-                  <div class="contact-last-message">{{ contact.content }}</div>
+                  <div class="contact-last-message">{{ contact.content || '-' }}</div>
                 </div>
                 <div class="contact-meta">
                   <div class="contact-time">{{ formatTime(contact.createdAt) }}</div>
                   <el-badge v-if="contact.unreadCount > 0" :value="contact.unreadCount" class="contact-unread" />
                 </div>
               </div>
+
               <el-button
                 v-if="!isOperator"
                 class="delete-btn"
@@ -53,39 +50,32 @@
               </el-button>
             </div>
           </div>
+
           <el-empty v-if="contacts.length === 0 && !loading" description="暂无联系人" />
         </el-scrollbar>
       </div>
 
-      <!-- 聊天窗口 -->
       <div class="chat-window">
         <div class="chat-header">
           <div class="chat-header-info">
-            <div class="chat-contact-name">{{ currentContact ? getContactName(currentContact) : '选择一个联系人开始聊天' }}</div>
+            <div class="chat-contact-name">
+              {{ currentContact ? getContactName(currentContact) : '选择一个联系人开始聊天' }}
+            </div>
           </div>
         </div>
+
         <el-scrollbar class="chat-messages" ref="messageScroll">
           <template v-if="currentContact">
-            <div
-              v-for="message in chatMessages"
-              :key="message.id"
-              class="message-item"
-            >
-
+            <div v-for="message in chatMessages" :key="message.id" class="message-item">
               <div
                 v-if="!message.requireAction || getActionConfig(message).actionMode === 'none'"
                 class="message"
                 :class="{ sent: isSentMessage(message), received: !isSentMessage(message) }"
               >
-
                 <div class="message-content">
-
                   <div class="message-text">{{ message.content }}</div>
-
                   <div class="message-time">{{ formatTime(message.createdAt) }}</div>
-
                 </div>
-
               </div>
 
               <MessageActionCard
@@ -108,11 +98,12 @@
                 :rejected-text="getActionConfig(message).rejectedText"
                 @action="payload => handleMessageAction(payload, message)"
               />
-
             </div>
           </template>
+
           <el-empty v-else description="点击左侧联系人开始聊天" />
         </el-scrollbar>
+
         <div class="chat-input">
           <div class="input-container">
             <el-input
@@ -130,15 +121,10 @@
       </div>
     </div>
 
-    <!-- 添加联系人对话框 -->
     <el-dialog v-model="showAddContact" title="添加联系人" width="400px">
       <el-form :model="addContactForm" label-width="80px">
         <el-form-item label="用户名">
-          <el-input
-            v-model="addContactForm.username"
-            placeholder="请输入对方用户名"
-            clearable
-          />
+          <el-input v-model="addContactForm.username" placeholder="请输入对方用户名" clearable />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -150,71 +136,166 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getMessageContacts, getChatMessages, sendMessage as sendApiMessage, updateMessageStatus, archiveContactMessages } from '../api/messages'
-import { getUserInfo } from '../api/auth'
+import {
+  getMessageContacts,
+  getChatMessages,
+  sendMessage as sendApiMessage,
+  updateMessageStatus,
+  archiveContactMessages
+} from '../api/messages'
+import { lookupContact } from '../api/auth'
+import {
+  respondTermination,
+  respondTerminationByCounterparty,
+  approveContractByAdmin,
+  rejectContractByAdmin,
+  approveContractByLandlord,
+  approveContractByLandlordWithStaff,
+  rejectContractByLandlord,
+  uploadSignedContract,
+  getAvailableStaffOptions
+} from '../api/contract'
+import { approveHouseByStaff, rejectHouseByStaff } from '../api/house'
 import MessageActionCard from '../components/MessageActionCard.vue'
 
 const route = useRoute()
 const router = useRouter()
+
 const principalType = sessionStorage.getItem('principalType') || 'USER'
 const userType = sessionStorage.getItem('userType') || 'USER'
 const isOperator = principalType === 'OPERATOR' || userType === 'ADMIN' || userType === 'STAFF'
+const isAdmin = isOperator && userType === 'ADMIN'
+const isStaff = isOperator && userType === 'STAFF'
 const currentPrincipalId = Number(sessionStorage.getItem(isOperator ? 'operatorId' : 'userId') || '0')
+
 const contacts = ref([])
 const chatMessages = ref([])
 const currentContact = ref(null)
-const activeContact = ref(null)
 const loading = ref(false)
 const sending = ref(false)
 const adding = ref(false)
 const newMessage = ref('')
 const messageScroll = ref(null)
 const showAddContact = ref(false)
-const addContactForm = ref({
-  username: ''
-})
+const addContactForm = ref({ username: '' })
 
-// 定时刷新消息状态（每 5 秒）
+const SYSTEM_ID = -1
+const CANCELLED = '__CANCEL__'
+
 let messageRefreshInterval = null
 
-// 启动消息状态定时刷新
+const activeContactKey = computed(() => (currentContact.value ? getContactUnique(currentContact.value) : ''))
+
+const parseContactKey = (contactKey) => {
+  if (!contactKey || !contactKey.includes(':')) return null
+  const [type, idPart] = contactKey.split(':', 2)
+  const id = Number(idPart)
+  if (!Number.isFinite(id)) return null
+  return { type, id }
+}
+
+const getContactId = (contact) => {
+  if (!contact) return null
+  if (typeof contact.contactId === 'number') return contact.contactId
+
+  const keyRef = parseContactKey(contact.contactKey)
+  if (keyRef) return keyRef.id
+
+  if (typeof contact.id === 'string' && contact.id.startsWith('temp-')) {
+    const extracted = Number(contact.id.replace('temp-', '').split('-').pop())
+    return Number.isFinite(extracted) ? extracted : null
+  }
+
+  if (contact.contactType === 'SYSTEM') return SYSTEM_ID
+
+  if (contact.senderId === currentPrincipalId) return contact.receiverId ?? contact.senderId
+  if (contact.senderId && contact.senderId !== currentPrincipalId) return contact.senderId
+  if (contact.receiverId && contact.receiverId !== currentPrincipalId) return contact.receiverId
+  return null
+}
+
+const getContactType = (contact) => {
+  if (!contact) return null
+  if (contact.contactType) return String(contact.contactType).toUpperCase()
+
+  const keyRef = parseContactKey(contact.contactKey)
+  if (keyRef) return keyRef.type
+
+  const contactId = getContactId(contact)
+  if (contactId === SYSTEM_ID) return 'SYSTEM'
+
+  if (
+    (typeof contact.senderOperatorId === 'number' && contact.senderOperatorId === contactId) ||
+    (typeof contact.receiverOperatorId === 'number' && contact.receiverOperatorId === contactId)
+  ) {
+    return 'OPERATOR'
+  }
+
+  return 'USER'
+}
+
+const getContactUnique = (contact) => {
+  if (!contact) return 'unknown'
+  if (contact.contactKey) return contact.contactKey
+  const type = getContactType(contact) || 'USER'
+  const id = getContactId(contact)
+  return `${type}:${id ?? 'unknown'}`
+}
+
+const getContactName = (contact) => {
+  if (!contact) return '未知联系人'
+  if (getContactType(contact) === 'SYSTEM') return '系统消息'
+
+  if (isSentMessage(contact)) {
+    return contact.receiverName || contact.receiverOperatorName || contact.senderName || '未知联系人'
+  }
+  return contact.senderName || contact.senderOperatorName || contact.receiverName || '未知联系人'
+}
+
+const isSentMessage = (message) => {
+  return message.senderId === currentPrincipalId || message.senderOperatorId === currentPrincipalId
+}
+
+const updateUnreadCountCache = (list) => {
+  const totalUnread = (list || []).reduce((sum, item) => sum + Number(item.unreadCount || 0), 0)
+  sessionStorage.setItem('unreadMessageCount', String(totalUnread))
+  window.dispatchEvent(new CustomEvent('unreadcountchange', { detail: totalUnread }))
+}
+
 const startMessageRefresh = () => {
-  if (messageRefreshInterval) {
-    clearInterval(messageRefreshInterval)
-  }
-  messageRefreshInterval = setInterval(() => {
-    console.log('定时刷新消息列表...')
-    loadContacts()
+  if (messageRefreshInterval) clearInterval(messageRefreshInterval)
+  messageRefreshInterval = setInterval(async () => {
+    await loadContacts()
     if (currentContact.value) {
-      console.log('定时刷新聊天记录...')
-      loadChatMessages(currentContact.value)
+      await loadChatMessages(currentContact.value)
     }
-  }, 5000) // 每 5 秒刷新一次
+  }, 5000)
 }
 
-// 停止消息状态定时刷新
 const stopMessageRefresh = () => {
-  if (messageRefreshInterval) {
-    clearInterval(messageRefreshInterval)
-    messageRefreshInterval = null
-  }
+  if (!messageRefreshInterval) return
+  clearInterval(messageRefreshInterval)
+  messageRefreshInterval = null
 }
 
-// 获取联系人列表
 const loadContacts = async () => {
   try {
     loading.value = true
-    const { data } = await getMessageContacts()
-    contacts.value = data || []
+    const selectedKey = currentContact.value ? getContactUnique(currentContact.value) : null
 
-    // 更新未读消息总数
-    const totalUnread = (data || []).reduce((sum, contact) => sum + (contact.unreadCount || 0), 0)
-    sessionStorage.setItem('unreadMessageCount', totalUnread.toString())
-    window.dispatchEvent(new CustomEvent('unreadcountchange', { detail: totalUnread }))
+    const { data } = await getMessageContacts()
+    const list = data || []
+    contacts.value = list
+    updateUnreadCountCache(list)
+
+    if (selectedKey) {
+      const matched = list.find((item) => getContactUnique(item) === selectedKey)
+      if (matched) currentContact.value = matched
+    }
   } catch (error) {
     ElMessage.error(error.response?.data || '获取联系人失败')
   } finally {
@@ -222,149 +303,348 @@ const loadContacts = async () => {
   }
 }
 
-// 标记与特定联系人的消息为已读
-const markContactMessagesAsRead = async (contactId) => {
-  try {
-    const contactIndex = contacts.value.findIndex(contact =>
-      (contact.senderId === contactId && contact.receiverId === currentPrincipalId) ||
-      (contact.receiverId === contactId && contact.senderId === currentPrincipalId)
-    )
-
-    if (contactIndex !== -1 && contacts.value[contactIndex].unreadCount > 0) {
-      const unreadCount = contacts.value[contactIndex].unreadCount
-      contacts.value[contactIndex].unreadCount = 0
-
-      const currentTotal = Number(sessionStorage.getItem('unreadMessageCount') || '0')
-      const newTotal = Math.max(0, currentTotal - unreadCount)
-      sessionStorage.setItem('unreadMessageCount', newTotal.toString())
-      window.dispatchEvent(new CustomEvent('unreadcountchange', { detail: newTotal }))
-    }
-  } catch (error) {
-    console.error('标记消息为已读失败', error)
-  }
-}
-
-// 选择联系人
 const selectContact = async (contact) => {
   const contactId = getContactId(contact)
-  if (!contactId) {
-    ElMessage.warning('该会话暂无法打开')
+  if (!contactId && contactId !== SYSTEM_ID) {
+    ElMessage.warning('该会话暂时无法打开')
     return
   }
 
   currentContact.value = contact
-  activeContact.value = contact
   await loadChatMessages(contact)
-  await markContactMessagesAsRead(contactId)
+  await loadContacts()
 
   await nextTick()
-  if (messageScroll.value) {
+  if (messageScroll.value?.wrapRef) {
     messageScroll.value.setScrollTop(messageScroll.value.wrapRef.scrollHeight)
   }
 }
+
 const loadChatMessages = async (contact) => {
   try {
     const contactId = getContactId(contact)
-    if (!contactId) {
+    if (!contactId && contactId !== SYSTEM_ID) {
       chatMessages.value = []
       return
     }
 
-    const { data } = await getChatMessages(contactId)
+    const contactType = getContactType(contact)
+    const { data } = await getChatMessages(contactId, contactType)
     chatMessages.value = data || []
   } catch (error) {
     ElMessage.error(error.response?.data || '获取聊天记录失败')
   }
 }
 
-// 获取联系人 ID（对方的用户 ID）
-const getContactId = (contact) => {
-  const currentUserId = currentPrincipalId
-  if (!contact) return null
+const normalizeActionType = (message) => {
+  if (!message?.requireAction) return null
 
-  console.log('getContactId - contact:', contact)
-  console.log('getContactId - currentUserId:', currentUserId)
-
-  // 系统/管理员通知：sender 为空且接收者是当前用户，使用 -1 作为系统会话标识
-  if ((!contact.senderId || contact.senderId === undefined) && contact.receiverId === currentUserId) {
-    console.log('getContactId - 系统消息，返回 -1')
-    return -1
+  if (message.type === 'USER_CHAT' && message.relatedContractId && !isOperator) {
+    return 'LANDLORD_CONTRACT_DECISION'
   }
 
-  // 如果消息是当前用户发送的，返回 receiverId（对方 ID）
-  if (contact.senderId === currentUserId) {
-    console.log('getContactId - 当前用户发送，返回 receiverId:', contact.receiverId)
-    return contact.receiverId || contact.senderId
+  if (message.type === 'ADMIN_NOTIFICATION' && message.requireAction) {
+    if (message.relatedRequestId) return 'FORCE_TERMINATION_NOTICE'
+    if (message.relatedContractId && isAdmin) return 'CONTRACT_PENDING_ADMIN_APPROVAL'
   }
 
-  // 如果消息是对方发送的，返回 senderId（对方 ID）
-  if (contact.senderId && contact.senderId !== currentUserId) {
-    console.log('getContactId - 对方发送，返回 senderId:', contact.senderId)
-    return contact.senderId
-  }
-
-  // 如果 receiverId 不是当前用户，返回 receiverId（对方 ID）
-  if (contact.receiverId && contact.receiverId !== currentUserId) {
-    console.log('getContactId - 返回 receiverId:', contact.receiverId)
-    return contact.receiverId
-  }
-
-  // 尝试从 id 中提取（临时联系人格式：temp-xxx）
-  if (contact.id && contact.id.startsWith('temp-')) {
-    const extractedId = contact.id.replace('temp-', '')
-    console.log('getContactId - 从 id 提取，返回:', extractedId)
-    return Number(extractedId)
-  }
-
-  console.log('getContactId - 无法确定，返回 null')
-  return null
+  return message.type
 }
 
-// 获取联系人名称
-const getContactName = (contact) => {
-  const currentUserId = currentPrincipalId
-  if (contact.senderId === currentUserId) {
-    return contact.receiverName || '未知用户'
+const defaultActionConfig = {
+  actionMode: 'none',
+  primaryText: '同意',
+  secondaryText: '拒绝',
+  primaryButtonType: 'primary',
+  secondaryButtonType: 'danger',
+  acceptedText: '已同意',
+  rejectedText: '已拒绝'
+}
+
+const getActionConfig = (message) => {
+  const actionType = normalizeActionType(message)
+  if (!actionType) return defaultActionConfig
+
+  const map = {
+    TERMINATION_REQUEST: {
+      actionMode: 'dual',
+      primaryText: '同意终止',
+      secondaryText: '拒绝终止',
+      primaryButtonType: 'warning',
+      secondaryButtonType: 'danger',
+      acceptedText: '已同意终止',
+      rejectedText: '已拒绝终止'
+    },
+    TERMINATION_PENDING_STAFF_REVIEW: {
+      actionMode: isStaff ? 'dual' : 'none',
+      primaryText: '审核通过',
+      secondaryText: '驳回申请',
+      primaryButtonType: 'success',
+      secondaryButtonType: 'danger',
+      acceptedText: '已通过',
+      rejectedText: '已驳回'
+    },
+    FORCE_TERMINATION_NOTICE: {
+      actionMode: isOperator ? 'dual' : 'none',
+      primaryText: '提交通过',
+      secondaryText: '驳回申请',
+      primaryButtonType: 'warning',
+      secondaryButtonType: 'danger',
+      acceptedText: '已提交通过',
+      rejectedText: '已驳回'
+    },
+    CONTRACT_PENDING_ADMIN_APPROVAL: {
+      actionMode: isAdmin ? 'dual' : 'none',
+      primaryText: '合同通过',
+      secondaryText: '合同驳回',
+      primaryButtonType: 'success',
+      secondaryButtonType: 'danger',
+      acceptedText: '已通过',
+      rejectedText: '已驳回'
+    },
+    CONTRACT_PENDING_STAFF_SIGNING: {
+      actionMode: isStaff ? 'single' : 'none',
+      primaryText: '上传签约文件',
+      secondaryText: '拒绝',
+      primaryButtonType: 'primary',
+      secondaryButtonType: 'danger',
+      acceptedText: '已上传',
+      rejectedText: '已拒绝'
+    },
+    HOUSE_PENDING_STAFF_REVIEW: {
+      actionMode: isStaff ? 'dual' : 'none',
+      primaryText: '房源通过',
+      secondaryText: '驳回房源',
+      primaryButtonType: 'success',
+      secondaryButtonType: 'danger',
+      acceptedText: '已通过',
+      rejectedText: '已驳回'
+    },
+    LANDLORD_CONTRACT_DECISION: {
+      actionMode: !isOperator ? 'dual' : 'none',
+      primaryText: '同意签约',
+      secondaryText: '拒绝签约',
+      primaryButtonType: 'primary',
+      secondaryButtonType: 'danger',
+      acceptedText: '已同意签约',
+      rejectedText: '已拒绝签约'
+    }
   }
-  return contact.senderName || '系统消息'
+
+  return map[actionType] || defaultActionConfig
 }
 
-// 是否是自己发送的消息
-const isSentMessage = (message) => {
-  const currentUserId = currentPrincipalId
-  return message.senderId === currentUserId
-}
-
-const getContactMode = (contact) => {
-  const contactId = getContactId(contact)
-  if (!contactId) return null
-  if (contactId === -1) return 'SYSTEM'
-  const isOperatorTarget =
-    contact.senderOperatorId === contactId || contact.receiverOperatorId === contactId
-  return isOperatorTarget ? 'OPERATOR' : 'USER'
-}
-
-// 处理消息操作（同意/拒绝）
-const handleMessageAction = async ({ messageId, action }) => {
+const promptText = async ({ title, message, required = false, placeholder = '' }) => {
   try {
-    await updateMessageStatus(messageId, action)
+    const { value } = await ElMessageBox.prompt(message, title, {
+      inputPlaceholder: placeholder,
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputPattern: required ? /\S+/ : undefined,
+      inputErrorMessage: required ? '内容不能为空' : undefined
+    })
+    return (value || '').trim()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      const cancelled = new Error(CANCELLED)
+      cancelled.code = CANCELLED
+      throw cancelled
+    }
+    throw error
+  }
+}
+
+const pickSignedFile = () => {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.pdf,.jpg,.jpeg,.png'
+    input.onchange = () => {
+      const file = input.files && input.files[0] ? input.files[0] : null
+      resolve(file)
+    }
+    input.click()
+  })
+}
+
+const selectOptionalStaffId = async () => {
+  const { data } = await getAvailableStaffOptions()
+  const options = data || []
+  if (!options.length) return null
+
+  const listText = options
+    .map((item) => `${item.id}: ${item.displayName || item.name || '业务员'} ${item.phone ? `(${item.phone})` : ''}`)
+    .join('\n')
+
+  const value = await promptText({
+    title: '可选指定业务员',
+    message: `可输入业务员ID（留空则自动分配）：\n${listText}`,
+    required: false,
+    placeholder: '例如：3'
+  })
+
+  if (!value) return null
+
+  const staffId = Number(value)
+  if (!Number.isInteger(staffId)) throw new Error('业务员ID格式不正确')
+
+  const exists = options.some((item) => Number(item.id) === staffId)
+  if (!exists) throw new Error('指定业务员不在可选列表中')
+
+  return staffId
+}
+
+const dispatchBusinessAction = async (message, actionKey) => {
+  const actionType = normalizeActionType(message)
+  const approve = actionKey === 'primary'
+
+  if (!actionType) throw new Error('该消息不支持业务动作')
+
+  if (actionType === 'TERMINATION_REQUEST') {
+    if (!message.relatedRequestId) throw new Error('缺少终止申请ID')
+    const comment = await promptText({
+      title: approve ? '同意终止' : '拒绝终止',
+      message: '可填写处理意见（选填）：',
+      required: false
+    })
+    await respondTerminationByCounterparty(message.relatedRequestId, { approve, comment })
+    return
+  }
+
+  if (actionType === 'TERMINATION_PENDING_STAFF_REVIEW') {
+    if (!message.relatedRequestId) throw new Error('缺少终止申请ID')
+    const comment = await promptText({
+      title: approve ? '终止审核通过' : '终止审核驳回',
+      message: '请填写审核意见：',
+      required: true
+    })
+    await respondTermination(message.relatedRequestId, { approve, comment })
+    return
+  }
+
+  if (actionType === 'FORCE_TERMINATION_NOTICE') {
+    if (!message.relatedRequestId) throw new Error('缺少终止申请ID')
+    const comment = await promptText({
+      title: approve ? '强制终止通过' : '强制终止驳回',
+      message: approve ? '通过时必须填写说明：' : '可填写驳回说明（选填）：',
+      required: approve
+    })
+    await respondTermination(message.relatedRequestId, { approve, comment })
+    return
+  }
+
+  if (actionType === 'CONTRACT_PENDING_ADMIN_APPROVAL') {
+    if (!message.relatedContractId) throw new Error('缺少合同ID')
+    if (approve) {
+      await approveContractByAdmin(message.relatedContractId)
+    } else {
+      const reason = await promptText({
+        title: '驳回合同',
+        message: '请填写驳回原因：',
+        required: true
+      })
+      await rejectContractByAdmin(message.relatedContractId, { reason })
+    }
+    return
+  }
+
+  if (actionType === 'CONTRACT_PENDING_STAFF_SIGNING') {
+    if (!message.relatedContractId) throw new Error('缺少合同ID')
+    const file = await pickSignedFile()
+    if (!file) {
+      const cancelled = new Error(CANCELLED)
+      cancelled.code = CANCELLED
+      throw cancelled
+    }
+    await uploadSignedContract(message.relatedContractId, file)
+    return
+  }
+
+  if (actionType === 'HOUSE_PENDING_STAFF_REVIEW') {
+    if (!message.relatedHouseId) throw new Error('缺少房源ID')
+    if (approve) {
+      await approveHouseByStaff(message.relatedHouseId)
+    } else {
+      const reason = await promptText({
+        title: '驳回房源',
+        message: '请填写驳回原因：',
+        required: true
+      })
+      await rejectHouseByStaff(message.relatedHouseId, reason)
+    }
+    return
+  }
+
+  if (actionType === 'LANDLORD_CONTRACT_DECISION') {
+    if (!message.relatedContractId) throw new Error('缺少合同ID')
+    if (approve) {
+      const staffId = await selectOptionalStaffId()
+      if (staffId) {
+        await approveContractByLandlordWithStaff(message.relatedContractId, staffId)
+      } else {
+        await approveContractByLandlord(message.relatedContractId)
+      }
+    } else {
+      const reason = await promptText({
+        title: '拒绝签约',
+        message: '可填写拒绝原因（选填）：',
+        required: false
+      })
+      await rejectContractByLandlord(message.relatedContractId, { reason })
+    }
+    return
+  }
+
+  throw new Error('未匹配到可执行动作')
+}
+
+const resolveStatusByAction = (actionKey) => (actionKey === 'primary' ? 'ACCEPT' : 'REJECT')
+
+const isAlreadyProcessedError = (message) => {
+  const text = String(message || '')
+  const keywords = ['已处理', '状态异常', '当前不在', '无权', '不存在', '无法']
+  return keywords.some((item) => text.includes(item))
+}
+
+const handleMessageAction = async ({ messageId, action }, message) => {
+  try {
+    await dispatchBusinessAction(message, action)
+
+    const status = resolveStatusByAction(action)
+    await updateMessageStatus(messageId, status)
+
+    await loadContacts()
     if (currentContact.value) {
       await loadChatMessages(currentContact.value)
     }
+
+    ElMessage.success('处理成功')
   } catch (error) {
-    ElMessage.error('操作失败：' + (error.response?.data || error.message))
+    if (error?.code === CANCELLED || error?.message === CANCELLED) return
+
+    const errorMsg = error.response?.data || error.message || '操作失败'
+    if (isAlreadyProcessedError(errorMsg)) {
+      ElMessage.warning('该事项已被处理，已刷新')
+      await loadContacts()
+      if (currentContact.value) {
+        await loadChatMessages(currentContact.value)
+      }
+      return
+    }
+
+    ElMessage.error(`操作失败：${errorMsg}`)
   }
 }
 
-// 删除联系人（归档消息，数据库保留记录）
 const deleteContact = async (contact) => {
   if (isOperator) {
-    ElMessage.warning('业务员账号暂不支持删除待办消息')
+    ElMessage.warning('业务账号暂不支持删除待办消息')
     return
   }
+
   try {
     await ElMessageBox.confirm(
-      `确定要删除与 ${getContactName(contact)} 的聊天记录吗？删除后消息将被归档隐藏，但数据库仍会保留以便后期核验。`,
+      `确定要删除与 ${getContactName(contact)} 的聊天记录吗？删除后会被归档隐藏。`,
       '删除联系人',
       {
         confirmButtonText: '确定',
@@ -374,115 +654,86 @@ const deleteContact = async (contact) => {
     )
 
     const contactId = getContactId(contact)
-    console.log('删除联系人，contactId:', contactId, 'contact:', contact)
+    const contactType = getContactType(contact)
 
-    if (!contactId || contactId === -1) {
-      ElMessage.warning('系统消息无法删除')
+    if (contactId === SYSTEM_ID) {
+      ElMessage.warning('系统会话不可删除')
       return
     }
 
-    // 调用后端归档 API
-    await archiveContactMessages(contactId)
+    await archiveContactMessages(contactId, contactType)
 
-    // 如果是当前选中的联系人，先清空
-    if (currentContact.value && currentContact.value.id === contact.id) {
+    if (currentContact.value && getContactUnique(currentContact.value) === getContactUnique(contact)) {
       currentContact.value = null
-      activeContact.value = null
       chatMessages.value = []
     }
 
-    // 从联系人列表中移除
-    const index = contacts.value.findIndex(c => c.id === contact.id)
-    if (index !== -1) {
-      contacts.value.splice(index, 1)
-    }
-
+    await loadContacts()
     ElMessage.success('聊天记录已归档')
   } catch (error) {
-    console.error('删除失败，错误详情:', error)
-    if (error !== 'cancel') {
-      const errorMsg = error.response?.data || error.message || '删除失败'
-      ElMessage.error(errorMsg)
-    }
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error.response?.data || error.message || '删除失败')
   }
 }
 
-// 添加联系人
 const addContact = async () => {
-  if (!addContactForm.value.username.trim()) {
+  const username = addContactForm.value.username.trim()
+  if (!username) {
     ElMessage.warning('请输入用户名')
     return
   }
 
   try {
     adding.value = true
-    // 根据用户名获取用户信息
-    const { data: userInfo } = await getUserInfo(addContactForm.value.username)
+    const { data } = await lookupContact(username)
 
-    console.log('添加联系人 - userInfo:', userInfo)
-
-    if (!userInfo) {
-      ElMessage.error('用户不存在')
+    if (!data) {
+      ElMessage.error('联系人不存在')
       return
     }
 
-    // 使用 userId 作为联系人 ID
-    const contactId = userInfo.userId || userInfo.id
+    const targetType = String(data.principalType || '').toUpperCase() === 'OPERATOR' ? 'OPERATOR' : 'USER'
+    const targetId = targetType === 'OPERATOR' ? data.operatorId : data.userId
 
-    if (!contactId) {
-      ElMessage.error('无法获取用户 ID')
+    if (!targetId) {
+      ElMessage.error('无法识别联系人ID')
       return
     }
 
-    // 检查是否已存在该联系人
-    const existingContact = contacts.value.find(contact => {
-      const existingContactId = getContactId(contact)
-      return existingContactId === contactId
-    })
-
-    if (existingContact) {
-      ElMessage.warning('该用户已在联系人列表中')
-      await selectContact(existingContact)
+    const key = `${targetType}:${targetId}`
+    const existing = contacts.value.find((item) => getContactUnique(item) === key)
+    if (existing) {
       showAddContact.value = false
+      await selectContact(existing)
       return
     }
 
-    // 创建临时联系人对象
-    const newContact = {
-      id: `temp-${contactId}`,
-      senderId: contactId,
-      receiverId: null,
-      senderName: userInfo.username || '未知用户',
-      receiverName: null,
+    const displayName = data.displayName || data.username || '未知联系人'
+    const tempContact = {
+      id: `temp-${targetType}-${targetId}`,
+      contactType: targetType,
+      contactId: targetId,
+      senderId: targetType === 'USER' ? targetId : null,
+      senderOperatorId: targetType === 'OPERATOR' ? targetId : null,
+      senderName: displayName,
+      senderOperatorName: displayName,
       content: '点击开始聊天',
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       unreadCount: 0
     }
 
-    console.log('添加联系人 - newContact:', newContact)
-
-    // 添加到联系人列表
-    contacts.value.unshift(newContact)
-
-    // 选中新添加的联系人
-    await selectContact(newContact)
-
-    ElMessage.success('添加成功')
+    contacts.value.unshift(tempContact)
     showAddContact.value = false
     addContactForm.value.username = ''
+    await selectContact(tempContact)
+    ElMessage.success('添加成功')
   } catch (error) {
-    console.error('添加联系人失败:', error)
-    if (error.response?.status === 404) {
-      ElMessage.error('用户不存在')
-    } else {
-      ElMessage.error(error.response?.data || '添加失败')
-    }
+    ElMessage.error(error.response?.data || error.message || '添加失败')
   } finally {
     adding.value = false
   }
 }
 
-// 发送消息
 const sendMessage = async () => {
   if (!newMessage.value.trim()) {
     ElMessage.warning('请输入消息内容')
@@ -496,36 +747,39 @@ const sendMessage = async () => {
 
   try {
     sending.value = true
+
     const contactId = getContactId(currentContact.value)
-    if (!contactId) {
-      ElMessage.warning('该会话暂无法发送消息')
+    const contactType = getContactType(currentContact.value)
+
+    if (!contactId && contactId !== SYSTEM_ID) {
+      ElMessage.warning('该会话暂时无法发送消息')
       return
     }
-    if (contactId === -1) {
-      ElMessage.warning('不能向系统会话发送消息')
+
+    if (contactId === SYSTEM_ID || contactType === 'SYSTEM') {
+      ElMessage.warning('系统会话不可发送消息')
       return
     }
-    const contactMode = getContactMode(currentContact.value)
+
     const payload = {
       title: '聊天消息',
       content: newMessage.value
     }
-    if (contactMode === 'OPERATOR') {
+
+    if (contactType === 'OPERATOR') {
       payload.receiverOperatorId = contactId
     } else {
       payload.receiverId = contactId
     }
-    await sendApiMessage({
-      ...payload
-    })
 
+    await sendApiMessage(payload)
     newMessage.value = ''
 
     await loadChatMessages(currentContact.value)
     await loadContacts()
 
     await nextTick()
-    if (messageScroll.value) {
+    if (messageScroll.value?.wrapRef) {
       messageScroll.value.setScrollTop(messageScroll.value.wrapRef.scrollHeight)
     }
   } catch (error) {
@@ -535,7 +789,6 @@ const sendMessage = async () => {
   }
 }
 
-// 格式化时间
 const formatTime = (dateString) => {
   if (!dateString) return ''
   const date = new Date(dateString)
@@ -552,66 +805,55 @@ const formatTime = (dateString) => {
   return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-// 处理未读消息数变化事件
 const handleUnreadCountChange = () => {
   loadContacts()
 }
 
-// 处理路由参数中的 receiverId（用于"联系房主"功能）
 const handleReceiverIdParam = async () => {
   const receiverId = route.query.receiverId
   const receiverName = route.query.receiverName
-  if (receiverId) {
-    // 等待联系人加载完成
-    await nextTick()
+  const receiverType = String(route.query.receiverType || 'USER').toUpperCase()
+  if (!receiverId) return
 
-    // 查找对应的联系人
-    const targetContact = contacts.value.find(contact => {
-      const contactId = getContactId(contact)
-      return contactId === Number(receiverId)
-    })
+  await nextTick()
 
-    if (targetContact) {
-      // 联系人已存在，直接选中
-      await selectContact(targetContact)
-    } else {
-      // 联系人不存在，创建临时联系人对象（第一次联系房主）
-      const tempContact = {
-        id: `temp-${receiverId}`,
-        senderId: Number(receiverId),
-        receiverId: null,
-        senderName: receiverName || '对方',
-        receiverName: null,
-        content: '点击开始聊天',
-        createdAt: new Date(),
-        unreadCount: 0
-      }
+  const targetKey = `${receiverType}:${Number(receiverId)}`
+  const targetContact = contacts.value.find((item) => getContactUnique(item) === targetKey)
 
-      // 选中临时联系人
-      currentContact.value = tempContact
-      activeContact.value = tempContact
-      chatMessages.value = []
-
-      ElMessage.success('已打开与房主的聊天')
+  if (targetContact) {
+    await selectContact(targetContact)
+  } else {
+    const tempContact = {
+      id: `temp-${receiverType}-${receiverId}`,
+      contactType: receiverType,
+      contactId: Number(receiverId),
+      senderId: receiverType === 'USER' ? Number(receiverId) : null,
+      senderOperatorId: receiverType === 'OPERATOR' ? Number(receiverId) : null,
+      senderName: receiverName || '对方',
+      senderOperatorName: receiverName || '对方',
+      content: '点击开始聊天',
+      createdAt: new Date().toISOString(),
+      unreadCount: 0
     }
 
-    // 清除 URL 参数，避免刷新后重复处理
-    const { receiverId: _, ...restQuery } = route.query
-    await router.replace({ path: route.path, query: restQuery })
+    currentContact.value = tempContact
+    chatMessages.value = []
   }
+
+  const { receiverId: _rid, receiverName: _rname, receiverType: _rtype, ...restQuery } = route.query
+  await router.replace({ path: route.path, query: restQuery })
 }
 
 onMounted(async () => {
   await loadContacts()
   window.addEventListener('unreadcountchange', handleUnreadCountChange)
-  startMessageRefresh() // 启动定时刷新
-  // 处理路由参数
+  startMessageRefresh()
   await handleReceiverIdParam()
 })
 
 onUnmounted(() => {
   window.removeEventListener('unreadcountchange', handleUnreadCountChange)
-  stopMessageRefresh() // 清理定时器
+  stopMessageRefresh()
 })
 </script>
 
@@ -640,22 +882,16 @@ onUnmounted(() => {
   overflow: hidden;
   margin-top: 12px;
   border: 1px solid #e4e7ed;
-  min-width: 1000px;
 }
 
 .contact-list {
-  width: 30%;
+  width: 32%;
   min-width: 320px;
-  max-width: 400px;
+  max-width: 420px;
   border-right: 1px solid #e4e7ed;
   display: flex;
   flex-direction: column;
   background-color: #fff;
-  flex-shrink: 0;
-}
-
-.contact-list.hidden {
-  display: none;
 }
 
 .list-header {
@@ -664,12 +900,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #fff;
 }
 
 .list-header h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
 }
 
@@ -681,11 +916,6 @@ onUnmounted(() => {
 
 .contact-scroll {
   flex: 1;
-  height: calc(100% - 69px);
-}
-
-.contact-item-wrapper {
-  margin-bottom: 0;
 }
 
 .contact-item-container {
@@ -696,25 +926,12 @@ onUnmounted(() => {
 
 .contact-item {
   display: flex;
-  padding: 16px 24px;
+  padding: 14px 20px;
   cursor: pointer;
   transition: background-color 0.2s;
   border-bottom: 1px solid #f5f5f5;
   background-color: #fff;
   flex: 1;
-  position: relative;
-}
-
-.contact-item::before {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background-color: #409EFF;
-  opacity: 0;
-  transition: opacity 0.2s;
 }
 
 .contact-item:hover {
@@ -723,46 +940,6 @@ onUnmounted(() => {
 
 .contact-item.active {
   background-color: #ecf5ff;
-}
-
-.contact-item.active::before {
-  opacity: 1;
-}
-
-.delete-btn {
-  margin-left: 12px;
-  flex-shrink: 0;
-  background-color: #f56c6c;
-  color: #fff;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s;
-  box-shadow: 0 2px 6px rgba(245, 108, 108, 0.3);
-  opacity: 0;
-  visibility: hidden;
-  position: absolute;
-  right: 16px;
-  top: 55%;
-  transform: translateY(-50%);
-  align-self: center;
-}
-
-.contact-item-container:hover .delete-btn {
-  opacity: 1;
-  visibility: visible;
-}
-
-.delete-btn:hover {
-  background-color: #f78989;
-  box-shadow: 0 3px 8px rgba(245, 108, 108, 0.4);
-}
-
-.delete-btn:active {
-  background-color: #e74c3c;
-  transform: translateY(-50%) scale(0.98);
 }
 
 .contact-avatar {
@@ -777,29 +954,25 @@ onUnmounted(() => {
 
 .contact-name {
   font-weight: 600;
-  color: var(--text);
   margin-bottom: 6px;
-  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .contact-last-message {
-  font-size: 14px;
+  font-size: 13px;
   color: #909399;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
 }
 
 .contact-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
-  min-width: 60px;
+  gap: 4px;
 }
 
 .contact-time {
@@ -807,8 +980,8 @@ onUnmounted(() => {
   color: #909399;
 }
 
-.contact-unread {
-  margin-top: 4px;
+.delete-btn {
+  margin-right: 12px;
 }
 
 .chat-window {
@@ -817,20 +990,12 @@ onUnmounted(() => {
   flex-direction: column;
   background-color: #f5f7fa;
   min-width: 0;
-  overflow: hidden;
 }
 
 .chat-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
+  padding: 14px 20px;
   border-bottom: 1px solid #e4e7ed;
   background-color: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
-.chat-header-info {
-  margin-left: 12px;
 }
 
 .chat-contact-name {
@@ -841,16 +1006,12 @@ onUnmounted(() => {
 
 .chat-messages {
   flex: 1;
-  padding: 24px;
-  background-color: #f5f7fa;
-  overflow-y: auto;
-  min-height: 400px;
+  padding: 20px;
 }
 
 .message {
   display: flex;
-  margin-bottom: 20px;
-  max-width: 100%;
+  margin-bottom: 16px;
 }
 
 .message.sent {
@@ -863,151 +1024,51 @@ onUnmounted(() => {
 
 .message-content {
   max-width: 60%;
-  padding: 14px 18px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 10px 14px;
+  border-radius: 10px;
   word-break: break-word;
-  font-size: 15px;
-  line-height: 1.6;
 }
 
 .message.sent .message-content {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-bottom-right-radius: 4px;
+  background: #409eff;
+  color: #fff;
 }
 
 .message.received .message-content {
-  background-color: #fff;
-  color: var(--text);
-  border-bottom-left-radius: 4px;
+  background: #fff;
   border: 1px solid #e4e7ed;
 }
 
 .message-text {
-  word-wrap: break-word;
-  line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .message-time {
   font-size: 12px;
-  margin-top: 8px;
-  text-align: right;
+  margin-top: 6px;
   opacity: 0.8;
-}
-
-.message.sent .message-time {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.message.received .message-time {
-  color: #909399;
+  text-align: right;
 }
 
 .chat-input {
-  padding: 12px 24px 16px;
+  padding: 12px 20px 16px;
   border-top: 1px solid #e4e7ed;
   background-color: #fff;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .input-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .chat-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: -4px;
 }
 
 .send-button {
-  width: 80px;
-  height: 36px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  transition: all 0.3s ease;
-}
-
-.operator-tip {
-  color: #909399;
-  font-size: 13px;
-}
-
-.send-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.send-button:active {
-  transform: translateY(0);
-}
-
-/* 滚动条美化 */
-.chat-messages::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-.contact-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.contact-scroll::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.contact-scroll::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-/* 输入框美化 */
-:deep(.el-textarea__inner) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  padding: 12px 16px;
-  font-size: 15px;
-  resize: none;
-  transition: all 0.3s;
-}
-
-:deep(.el-textarea__inner:hover) {
-  border-color: #409EFF;
-}
-
-:deep(.el-textarea__inner:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-}
-
-@media (max-width: 1024px) {
-  .chat-container {
-    min-width: 800px;
-  }
-
-  .contact-list {
-    width: 35%;
-  }
+  min-width: 80px;
 }
 
 @media (max-width: 768px) {
@@ -1016,17 +1077,15 @@ onUnmounted(() => {
   }
 
   .chat-container {
-    min-width: 100%;
     height: calc(100vh - 100px);
+    flex-direction: column;
   }
 
   .contact-list {
     width: 100%;
     max-width: none;
-  }
-
-  .chat-window {
-    display: none;
+    min-width: 0;
+    max-height: 45%;
   }
 }
 </style>

@@ -220,8 +220,10 @@ public class ContractService {
                     "强制终止待联合审核",
                     String.format("合同《%s》(ID:%d) 发起强制终止，请进行管理员裁决", contract.getHouse().getTitle(), contract.getId()),
                     contract.getId(),
+                    null,
                     terminationRequest.getId(),
-                    true
+                    true,
+                    MessageType.FORCE_TERMINATION_NOTICE
             );
             messageService.sendMessage(
                     null,
@@ -591,7 +593,9 @@ public class ContractService {
                 String.format("合同《%s》(ID:%d) 已上传签约文件，请审核", contract.getHouse().getTitle(), contract.getId()),
                 contract.getId(),
                 null,
-                true
+                null,
+                true,
+                MessageType.CONTRACT_PENDING_ADMIN_APPROVAL
         );
 
         messageService.sendMessage(null, contract.getTenant().getId(), "合同已提交管理员审核", "业务员已上传签约合同，等待管理员审核", MessageType.CONTRACT_PENDING_ADMIN_APPROVAL, contract.getId(), null, false);
@@ -756,8 +760,10 @@ public class ContractService {
                     "强制终止待管理员裁决",
                     String.format("合同《%s》(ID:%d) 业务员已提交方案，请管理员裁决", contract.getHouse().getTitle(), contract.getId()),
                     contract.getId(),
+                    null,
                     request.getId(),
-                    true
+                    true,
+                    MessageType.FORCE_TERMINATION_NOTICE
             );
         } else {
             messageService.notifyStaff(

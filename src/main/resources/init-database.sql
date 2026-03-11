@@ -1,14 +1,14 @@
--- ==========================================
+﻿-- ==========================================
 -- easy_rent 数据库初始化脚本
 -- ==========================================
--- 使用方式（推荐命令行）：
--- 1) mysql -u root -p < src/main/resources/init-database.sql
--- 2) 启动后端后，会自动执行 schema-v3.sql 建表并初始化默认管理员账号
---    默认管理员：admin / 123456
+-- 使用方式（命令行推荐）：
+--   1) mysql -u root -p < src/main/resources/init-database.sql
+--   2) 启动后端后，应用会自动执行 schema-v3.sql 建表并初始化默认管理员账号
+--      默认管理员：admin / 123456
 --
--- 如果你在 IDE 数据库工具里执行，请分两步：
--- A. 执行本文件（仅重建 easy_rent）
--- B. 再执行 src/main/resources/schema-v3.sql
+-- 若在 IDE 的数据库工具执行，请分两步：
+--   A. 先执行本文件（仅重建 easy_rent 数据库）
+--   B. 再执行 src/main/resources/schema-v3.sql
 
 DROP DATABASE IF EXISTS easy_rent;
 CREATE DATABASE easy_rent

@@ -622,13 +622,23 @@ public class MessageService {
     }
 
     public void notifyAdmins(String title, String content, Long contractId, Long requestId, boolean requireAction) {
-        notifyAdmins(title, content, contractId, null, requestId, requireAction);
+        notifyAdmins(title, content, contractId, null, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
     }
 
     public void notifyAdmins(String title, String content, Long contractId, Long houseId, Long requestId, boolean requireAction) {
+        notifyAdmins(title, content, contractId, houseId, requestId, requireAction, MessageType.ADMIN_NOTIFICATION);
+    }
+
+    public void notifyAdmins(String title,
+                             String content,
+                             Long contractId,
+                             Long houseId,
+                             Long requestId,
+                             boolean requireAction,
+                             MessageType type) {
         operatorAccountRepository.findByRoleAndEnabled(OperatorRole.ADMIN, true).forEach(admin ->
                 sendOperatorMessage(null, admin.getId(), title, content,
-                        MessageType.ADMIN_NOTIFICATION, contractId, houseId, requestId, requireAction)
+                        type, contractId, houseId, requestId, requireAction)
         );
     }
 

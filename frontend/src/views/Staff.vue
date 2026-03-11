@@ -133,7 +133,8 @@ const statusText = (status) => {
     TERMINATION_PENDING_STAFF_REVIEW: '待业务员终止审核',
     TERMINATION_FORCE_PENDING_JOINT_REVIEW: '强制终止待联合审核',
     ACTIVE: '进行中',
-    TERMINATED: '已终止'
+    TERMINATED: '已终止',
+    REJECTED: '已拒绝'
   }
   return map[status] || status
 }
@@ -145,7 +146,8 @@ const statusType = (status) => {
     TERMINATION_PENDING_STAFF_REVIEW: 'warning',
     TERMINATION_FORCE_PENDING_JOINT_REVIEW: 'warning',
     ACTIVE: 'success',
-    TERMINATED: 'danger'
+    TERMINATED: 'danger',
+    REJECTED: 'danger'
   }
   return map[status] || ''
 }
