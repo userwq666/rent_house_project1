@@ -89,11 +89,8 @@ public class MessageService {
     }
 
     public List<MessageDTO> getMessageContacts(Long accountId) {
-        Account account = requireAccount(accountId);
         List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(accountId);
-        if (account.getAccountType() == AccountType.USER) {
-            messages = messages.stream().filter(msg -> !isArchivedForUser(msg, accountId)).toList();
-        }
+        messages = messages.stream().filter(msg -> !isArchivedForAccount(msg, accountId)).toList();
 
         Map<String, List<Message>> grouped = messages.stream()
                 .collect(Collectors.groupingBy(msg -> buildContactKey(resolveContactRef(msg, accountId))));
@@ -127,7 +124,6 @@ public class MessageService {
     }
 
     public List<MessageDTO> getChatMessages(Long accountId, Long contactId, String contactType) {
-        Account account = requireAccount(accountId);
         List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(accountId);
 
         List<Message> chatMessages;
@@ -146,9 +142,7 @@ public class MessageService {
                     .collect(Collectors.toList());
         }
 
-        if (account.getAccountType() == AccountType.USER) {
-            chatMessages = chatMessages.stream().filter(msg -> !isArchivedForUser(msg, accountId)).toList();
-        }
+        chatMessages = chatMessages.stream().filter(msg -> !isArchivedForAccount(msg, accountId)).toList();
 
         List<Message> unreadMessages = chatMessages.stream()
                 .filter(msg -> msg.getReceiver() != null
@@ -212,27 +206,28 @@ public class MessageService {
         }
     }
 
-    public void archiveContactMessages(Long userId, Long contactId) {
-        archiveContactMessages(userId, contactId, null);
+    public void archiveContactMessages(Long accountId, Long contactId) {
+        archiveContactMessages(accountId, contactId, null);
     }
 
-    public void archiveContactMessages(Long userId, Long contactId, String contactType) {
-        Account user = requireAccount(userId);
-        if (user.getAccountType() != AccountType.USER) {
-            throw new RuntimeException("仅普通用户支持会话归档");
-        }
+    public void archiveContactMessages(Long accountId, Long contactId, String contactType) {
+        requireAccount(accountId);
         if (contactId == null || contactId.equals(SYSTEM_ID)) {
             throw new RuntimeException("系统会话不可归档");
         }
 
-        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(userId);
+        List<Message> messages = messageRepository.findBySenderIdOrReceiverIdOrderByCreatedAtDesc(accountId);
         List<Message> contactMessages = messages.stream()
-                .filter(msg -> isAccountPair(msg, userId, contactId))
-                .filter(msg -> matchContactType(msg, userId, contactType))
+                .filter(msg -> isAccountPair(msg, accountId, contactId))
+                .filter(msg -> matchContactType(msg, accountId, contactType))
                 .collect(Collectors.toList());
 
+        if (hasPendingAction(contactMessages)) {
+            throw new RuntimeException("当前会话存在待确认事项，不能归档");
+        }
+
         for (Message message : contactMessages) {
-            addArchivedUserId(message, userId);
+            addArchivedAccountId(message, accountId);
         }
 
         if (!contactMessages.isEmpty()) {
@@ -383,15 +378,22 @@ public class MessageService {
         return CONTACT_SYSTEM.equalsIgnoreCase(contactType);
     }
 
-    private void addArchivedUserId(Message message, Long userId) {
+    private boolean hasPendingAction(List<Message> messages) {
+        return messages.stream()
+                .anyMatch(message -> Boolean.TRUE.equals(message.getRequireAction())
+                        && message.getStatus() != MessageStatus.ACCEPT
+                        && message.getStatus() != MessageStatus.REJECT);
+    }
+
+    private void addArchivedAccountId(Message message, Long accountId) {
         Set<String> archivedIds = parseArchivedIds(message.getArchivedByUserIds());
-        archivedIds.add(userId.toString());
+        archivedIds.add(accountId.toString());
         message.setArchivedByUserIds(String.join(",", archivedIds));
     }
 
-    private boolean isArchivedForUser(Message message, Long userId) {
+    private boolean isArchivedForAccount(Message message, Long accountId) {
         Set<String> archivedIds = parseArchivedIds(message.getArchivedByUserIds());
-        return archivedIds.contains(userId.toString());
+        return archivedIds.contains(accountId.toString());
     }
 
     private Set<String> parseArchivedIds(String archivedByUserIds) {

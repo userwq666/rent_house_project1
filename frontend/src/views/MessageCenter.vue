@@ -40,7 +40,6 @@
               </div>
 
               <el-button
-                v-if="!isOperator"
                 class="delete-btn"
                 type="danger"
                 size="small"
@@ -638,11 +637,6 @@ const handleMessageAction = async ({ messageId, action }, message) => {
 }
 
 const deleteContact = async (contact) => {
-  if (isOperator) {
-    ElMessage.warning('业务账号暂不支持删除待办消息')
-    return
-  }
-
   try {
     await ElMessageBox.confirm(
       `确定要删除与 ${getContactName(contact)} 的聊天记录吗？删除后会被归档隐藏。`,

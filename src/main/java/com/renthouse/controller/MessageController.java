@@ -142,8 +142,8 @@ public class MessageController {
     public ResponseEntity<?> archiveContactMessages(@PathVariable Long contactId,
                                                     @RequestParam(required = false) String contactType) {
         try {
-            Long userId = AuthUtil.getCurrentUserId();
-            messageService.archiveContactMessages(userId, contactId, contactType);
+            Long accountId = AuthUtil.getCurrentAccountId();
+            messageService.archiveContactMessages(accountId, contactId, contactType);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
