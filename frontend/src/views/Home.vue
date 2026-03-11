@@ -45,15 +45,15 @@
     <div class="search" id="search-anchor">
       <div class="search-form">
         <el-form-item>
-          <el-input v-model="searchForm.city" placeholder="区域/城市" :prefix-icon="Location" />
+          <el-input v-model="searchForm.city" placeholder="区域/城市" :prefix-icon="Location" style="width: 160px" />
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-input v-model="searchForm.keyword" placeholder="关键词 / #房源ID / id:房源ID" :prefix-icon="Search" />
+          <el-input v-model="searchForm.keyword" placeholder="关键词 / #ID / id:ID" :prefix-icon="Search" style="width: 240px" />
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-select v-model="searchForm.priceRange" placeholder="价格范围" style="width: 140px">
+          <el-select v-model="searchForm.priceRange" placeholder="价格范围" style="width: 118px">
             <el-option label="1000以下" value="0-1000" />
             <el-option label="1000-2000" value="1000-2000" />
             <el-option label="2000-4000" value="2000-4000" />
@@ -62,7 +62,7 @@
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-select v-model="searchForm.areaRange" placeholder="面积范围" style="width: 140px">
+          <el-select v-model="searchForm.areaRange" placeholder="面积范围" style="width: 118px">
             <el-option label="50㎡以下" value="0-50" />
             <el-option label="50-80㎡" value="50-80" />
             <el-option label="80-120㎡" value="80-120" />
@@ -71,7 +71,7 @@
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-select v-model="searchForm.houseType" placeholder="户型" style="width: 120px">
+          <el-select v-model="searchForm.houseType" placeholder="户型" style="width: 106px">
             <el-option label="一居室" value="1居" />
             <el-option label="一室一厅" value="1室1厅" />
             <el-option label="两室一厅" value="2室1厅" />
@@ -82,7 +82,7 @@
         </el-form-item>
         <div class="divider">|</div>
         <el-form-item>
-          <el-select v-model="searchForm.sortBy" placeholder="排序" style="width: 140px">
+          <el-select v-model="searchForm.sortBy" placeholder="排序" style="width: 120px">
             <el-option label="最新发布" value="latest" />
             <el-option label="租金从低到高" value="price_asc" />
             <el-option label="租金从高到低" value="price_desc" />
@@ -90,8 +90,8 @@
             <el-option label="面积从大到小" value="area_desc" />
           </el-select>
         </el-form-item>
-        <el-button type="primary" class="glow" @click="handleSearch">搜索</el-button>
-        <el-button @click="handleReset">重置</el-button>
+        <el-button type="primary" class="glow" :loading="searching" @click="handleSearch">搜索</el-button>
+        <el-button :disabled="searching" @click="handleReset">重置</el-button>
       </div>
     </div>
 
@@ -144,6 +144,7 @@ const router = useRouter()
 const route = useRoute()
 const houses = ref([])
 const loading = ref(false)
+const searching = ref(false)
 const unreadCount = ref(0)
 
 const searchForm = reactive({
@@ -186,21 +187,25 @@ const handleUnreadCountChange = (event) => {
   unreadCount.value = event.detail || 0
 }
 
-const fetchHouses = async () => {
+const fetchHouses = async ({ showLoading = false } = {}) => {
   try {
-    loading.value = true
+    if (showLoading) {
+      loading.value = true
+    }
     const { data } = await getAvailableHouses()
     houses.value = data || []
   } catch (error) {
     ElMessage.error('获取房源失败')
   } finally {
-    loading.value = false
+    if (showLoading) {
+      loading.value = false
+    }
   }
 }
 
 const handleSearch = async () => {
   try {
-    loading.value = true
+    searching.value = true
     let min = null
     let max = null
     let minArea = null
@@ -230,18 +235,18 @@ const handleSearch = async () => {
   } catch (error) {
     ElMessage.error('搜索失败')
   } finally {
-    loading.value = false
+    searching.value = false
   }
 }
 
-const handleReset = () => {
+const handleReset = async () => {
   searchForm.city = ''
   searchForm.keyword = ''
   searchForm.priceRange = ''
   searchForm.areaRange = ''
   searchForm.houseType = ''
   searchForm.sortBy = 'latest'
-  fetchHouses()
+  await handleSearch()
 }
 
 const scrollToSearch = () => {
@@ -274,7 +279,7 @@ const getImageList = (images) => {
 }
 
 onMounted(() => {
-  fetchHouses()
+  fetchHouses({ showLoading: true })
   fetchUnreadCount()
   window.addEventListener('storage', syncAuth)
   window.addEventListener('unreadcountchange', handleUnreadCountChange)
@@ -467,7 +472,7 @@ onUnmounted(() => {
 
 /* Search Section - 简洁搜索框 */
 .search {
-  padding: 30px 40px;
+  padding: 24px 28px;
   margin-bottom: 60px;
   background: white;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
@@ -489,8 +494,9 @@ onUnmounted(() => {
 .search-form {
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .search-form .el-form-item {
@@ -500,7 +506,7 @@ onUnmounted(() => {
 
 .divider {
   color: #ddd;
-  margin: 0 10px;
+  margin: 0 4px;
 }
 
 /* Houses Grid - 卡片式布局 */
@@ -712,6 +718,24 @@ onUnmounted(() => {
   
   .house-grid-container {
     grid-template-columns: 1fr;
+  }
+
+  .search {
+    padding: 16px;
+  }
+
+  .search-form {
+    flex-wrap: wrap;
+    white-space: normal;
+    gap: 8px;
+  }
+
+  .search-form :deep(.el-form-item) {
+    width: 100%;
+  }
+
+  .divider {
+    display: none;
   }
 }
 </style>
