@@ -90,8 +90,8 @@
             <el-option label="面积从大到小" value="area_desc" />
           </el-select>
         </el-form-item>
-        <el-button type="primary" class="glow" :loading="searching" @click="handleSearch">搜索</el-button>
-        <el-button :disabled="searching" @click="handleReset">重置</el-button>
+        <el-button type="primary" class="glow search-btn" :disabled="searching" @click="handleSearch">搜索</el-button>
+        <el-button class="reset-btn" :disabled="searching" @click="handleReset">重置</el-button>
       </div>
     </div>
 
@@ -509,6 +509,14 @@ onUnmounted(() => {
   margin: 0 4px;
 }
 
+.search-btn {
+  width: 72px;
+}
+
+.reset-btn {
+  width: 72px;
+}
+
 /* Houses Grid - 卡片式布局 */
 .section-head {
   margin-bottom: 30px;
@@ -546,6 +554,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 30px;
+  min-height: 240px;
 }
 
 .house-card {
@@ -558,26 +567,7 @@ onUnmounted(() => {
   flex-direction: column;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  animation: scaleIn 0.6s ease backwards;
 }
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.house-card:nth-child(1) { animation-delay: 0.1s; }
-.house-card:nth-child(2) { animation-delay: 0.2s; }
-.house-card:nth-child(3) { animation-delay: 0.3s; }
-.house-card:nth-child(4) { animation-delay: 0.4s; }
-.house-card:nth-child(5) { animation-delay: 0.5s; }
-.house-card:nth-child(6) { animation-delay: 0.6s; }
 
 .house-card:hover {
   transform: translateY(-10px) scale(1.02);
