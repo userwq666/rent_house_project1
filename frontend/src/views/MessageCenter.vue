@@ -882,6 +882,7 @@ onUnmounted(() => {
   overflow: hidden;
   margin-top: 12px;
   border: 1px solid #e4e7ed;
+  animation: pageFadeIn 0.28s ease;
 }
 
 .contact-list {
@@ -928,18 +929,40 @@ onUnmounted(() => {
   display: flex;
   padding: 14px 20px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.22s ease;
   border-bottom: 1px solid #f5f5f5;
   background-color: #fff;
   flex: 1;
+  position: relative;
+}
+
+.contact-item::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #409eff;
+  opacity: 0;
+  transition: opacity 0.22s ease;
 }
 
 .contact-item:hover {
   background-color: #f5f7fa;
+  transform: translateX(1px);
 }
 
 .contact-item.active {
   background-color: #ecf5ff;
+}
+
+.contact-item.active::before {
+  opacity: 1;
+}
+
+.contact-item-wrapper {
+  animation: itemFadeIn 0.22s ease both;
 }
 
 .contact-avatar {
@@ -982,6 +1005,16 @@ onUnmounted(() => {
 
 .delete-btn {
   margin-right: 12px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: all 0.2s ease;
+}
+
+.contact-item-container:hover .delete-btn {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .chat-window {
@@ -996,6 +1029,7 @@ onUnmounted(() => {
   padding: 14px 20px;
   border-bottom: 1px solid #e4e7ed;
   background-color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
 .chat-contact-name {
@@ -1012,6 +1046,7 @@ onUnmounted(() => {
 .message {
   display: flex;
   margin-bottom: 16px;
+  animation: itemFadeIn 0.2s ease both;
 }
 
 .message.sent {
@@ -1027,16 +1062,25 @@ onUnmounted(() => {
   padding: 10px 14px;
   border-radius: 10px;
   word-break: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.message-content:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
 }
 
 .message.sent .message-content {
-  background: #409eff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
+  border-bottom-right-radius: 4px;
 }
 
 .message.received .message-content {
   background: #fff;
   border: 1px solid #e4e7ed;
+  border-bottom-left-radius: 4px;
 }
 
 .message-text {
@@ -1069,6 +1113,43 @@ onUnmounted(() => {
 
 .send-button {
   min-width: 80px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: all 0.2s ease;
+}
+
+.send-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.send-button:active {
+  transform: translateY(0);
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes itemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 768px) {
