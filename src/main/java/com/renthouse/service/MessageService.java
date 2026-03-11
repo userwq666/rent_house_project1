@@ -1,14 +1,14 @@
 package com.renthouse.service;
 
 import com.renthouse.domain.Message;
-import com.renthouse.domain.OperatorAccount;
+import com.renthouse.domain.Account;
 import com.renthouse.domain.User;
 import com.renthouse.dto.MessageDTO;
+import com.renthouse.enums.AccountType;
 import com.renthouse.enums.MessageStatus;
 import com.renthouse.enums.MessageType;
-import com.renthouse.enums.OperatorRole;
 import com.renthouse.repository.MessageRepository;
-import com.renthouse.repository.OperatorAccountRepository;
+import com.renthouse.repository.AccountRepository;
 import com.renthouse.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -31,7 +31,7 @@ public class MessageService {
     private UserRepository userRepository;
 
     @Autowired
-    private OperatorAccountRepository operatorAccountRepository;
+    private AccountRepository accountRepository;
 
     private static final Long SYSTEM_ID = -1L;
     private static final String SYSTEM_NAME = "系统消息";
@@ -78,14 +78,20 @@ public class MessageService {
 
     public Message sendOperatorMessage(Long senderOperatorId, Long receiverOperatorId, String title, String content,
                                        MessageType type, Long contractId, Long houseId, Long requestId, boolean requireAction) {
-        OperatorAccount sender = senderOperatorId != null
-                ? operatorAccountRepository.findById(senderOperatorId)
+        Account sender = senderOperatorId != null
+                ? accountRepository.findById(senderOperatorId)
                 .orElse(null)
                 : null;
-        OperatorAccount receiver = receiverOperatorId != null
-                ? operatorAccountRepository.findById(receiverOperatorId)
+        Account receiver = receiverOperatorId != null
+                ? accountRepository.findById(receiverOperatorId)
                 .orElseThrow(() -> new RuntimeException("接收业务账号不存在"))
                 : null;
+        if (sender != null && sender.getAccountType() == AccountType.USER) {
+            throw new RuntimeException("发送方必须是管理员/业务员");
+        }
+        if (receiver != null && receiver.getAccountType() == AccountType.USER) {
+            throw new RuntimeException("接收方必须是管理员/业务员");
+        }
 
         Message message = new Message();
         message.setSenderOperatorId(sender != null ? sender.getId() : null);
@@ -115,10 +121,13 @@ public class MessageService {
         if (receiverUserId != null && receiverUserId.equals(SYSTEM_ID)) {
             throw new RuntimeException("不能向系统发送消息");
         }
-        OperatorAccount sender = senderOperatorId != null
-                ? operatorAccountRepository.findById(senderOperatorId)
+        Account sender = senderOperatorId != null
+                ? accountRepository.findById(senderOperatorId)
                 .orElseThrow(() -> new RuntimeException("发送方业务账号不存在"))
                 : null;
+        if (sender != null && sender.getAccountType() == AccountType.USER) {
+            throw new RuntimeException("发送方必须是管理员/业务员");
+        }
         User receiver = receiverUserId != null
                 ? userRepository.findById(receiverUserId)
                 .orElseThrow(() -> new RuntimeException("接收方不存在"))
@@ -155,8 +164,11 @@ public class MessageService {
                 ? userRepository.findById(senderUserId)
                 .orElseThrow(() -> new RuntimeException("发送方用户不存在"))
                 : null;
-        OperatorAccount receiver = operatorAccountRepository.findById(receiverOperatorId)
+        Account receiver = accountRepository.findById(receiverOperatorId)
                 .orElseThrow(() -> new RuntimeException("接收业务账号不存在"));
+        if (receiver.getAccountType() == AccountType.USER) {
+            throw new RuntimeException("接收方必须是管理员/业务员");
+        }
 
         Message message = new Message();
         message.setSender(sender);
@@ -360,9 +372,9 @@ public class MessageService {
     }
 
     public List<MessageDTO> getAdminMessages(Long operatorId) {
-        OperatorAccount account = operatorAccountRepository.findById(operatorId)
+        Account account = accountRepository.findById(operatorId)
                 .orElseThrow(() -> new RuntimeException("账号不存在"));
-        if (account.getRole() != OperatorRole.ADMIN) {
+        if (account.getAccountType() != AccountType.ADMIN) {
             throw new RuntimeException("权限不足");
         }
         return getOperatorMessages(operatorId);
@@ -636,7 +648,7 @@ public class MessageService {
                              Long requestId,
                              boolean requireAction,
                              MessageType type) {
-        operatorAccountRepository.findByRoleAndEnabled(OperatorRole.ADMIN, true).forEach(admin ->
+        accountRepository.findByAccountTypeAndEnabled(AccountType.ADMIN, true).forEach(admin ->
                 sendOperatorMessage(null, admin.getId(), title, content,
                         type, contractId, houseId, requestId, requireAction)
         );

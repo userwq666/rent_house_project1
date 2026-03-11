@@ -1,13 +1,15 @@
--- ==========================================
--- easy_rent 表结构（v3）
--- 说明：该脚本用于“新库初始化”，不包含 ALTER 增量语句
+﻿-- ==========================================
+-- easy_rent 表结构（rank2）
+-- 说明：用于新库初始化
 -- ==========================================
 
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL COMMENT '登录账号',
     password VARCHAR(255) NOT NULL COMMENT '密码（BCrypt）',
-    account_type VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '账号类型：USER',
+    account_type VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '账号角色：USER/STAFF/ADMIN',
+    display_name VARCHAR(80) NULL COMMENT '显示名（管理员/业务员）',
+    phone VARCHAR(20) NULL COMMENT '联系电话（管理员/业务员）',
     enabled TINYINT(1) DEFAULT 1,
     can_publish TINYINT(1) DEFAULT 1,
     can_rent TINYINT(1) DEFAULT 1,
@@ -16,7 +18,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     UNIQUE KEY uk_username (username),
     INDEX idx_account_type (account_type),
     INDEX idx_enabled (enabled)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通用户账号';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一账号表';
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -31,21 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
     INDEX idx_phone (phone),
     INDEX idx_email (email)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通用户信息';
-
-CREATE TABLE IF NOT EXISTS operator_accounts (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL COMMENT 'ADMIN/STAFF',
-    display_name VARCHAR(80),
-    phone VARCHAR(20),
-    enabled TINYINT(1) DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_operator_role (role),
-    INDEX idx_operator_enabled (enabled)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后台操作员账号';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通用户资料扩展';
 
 CREATE TABLE IF NOT EXISTS houses (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -64,7 +52,7 @@ CREATE TABLE IF NOT EXISTS houses (
     images MEDIUMTEXT,
     facilities TEXT,
     view_count INT DEFAULT 0,
-    assigned_staff_id BIGINT NULL COMMENT '分配业务员ID',
+    assigned_staff_id BIGINT NULL COMMENT '分配业务员（accounts.id）',
     review_comment TEXT NULL COMMENT '审核意见',
     reviewed_at DATETIME NULL COMMENT '审核时间',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -90,11 +78,11 @@ CREATE TABLE IF NOT EXISTS contracts (
         COMMENT 'PENDING_LANDLORD_APPROVAL/PENDING_STAFF_SIGNING/PENDING_ADMIN_APPROVAL/ACTIVE/EXPIRED/TERMINATED/REJECTED/TERMINATION_PENDING/TERMINATION_PENDING_COUNTERPARTY/TERMINATION_PENDING_STAFF_REVIEW/TERMINATION_FORCE_PENDING_JOINT_REVIEW',
     signed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
-    assigned_staff_id BIGINT NULL COMMENT '签约跟进业务员',
+    assigned_staff_id BIGINT NULL COMMENT '签约跟进业务员（accounts.id）',
     signed_contract_url VARCHAR(500) NULL COMMENT '签约文件URL',
     signed_contract_name VARCHAR(255) NULL COMMENT '签约文件原名',
     signed_contract_uploaded_at DATETIME NULL,
-    signed_contract_uploaded_by BIGINT NULL COMMENT '上传业务员ID',
+    signed_contract_uploaded_by BIGINT NULL COMMENT '上传人（accounts.id）',
     landlord_termination_reject_count INT DEFAULT 0 COMMENT '房东发起终止被拒次数',
     tenant_termination_reject_count INT DEFAULT 0 COMMENT '租客发起终止被拒次数',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -114,7 +102,7 @@ CREATE TABLE IF NOT EXISTS termination_requests (
     contract_id BIGINT NOT NULL,
     requester_id BIGINT NOT NULL,
     responder_id BIGINT NULL,
-    review_staff_id BIGINT NULL COMMENT '终止审核业务员',
+    review_staff_id BIGINT NULL COMMENT '终止审核业务员（accounts.id）',
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/REJECTED/FORCE_TERMINATED',
     reason TEXT,
     force_reason TEXT,
@@ -140,8 +128,8 @@ CREATE TABLE IF NOT EXISTS messages (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     sender_id BIGINT NULL COMMENT '用户发送者',
     receiver_id BIGINT NULL COMMENT '用户接收者',
-    sender_operator_id BIGINT NULL COMMENT '操作员发送者',
-    receiver_operator_id BIGINT NULL COMMENT '操作员接收者',
+    sender_operator_id BIGINT NULL COMMENT '操作员发送者（accounts.id）',
+    receiver_operator_id BIGINT NULL COMMENT '操作员接收者（accounts.id）',
     sender_operator_name VARCHAR(80) NULL,
     receiver_operator_name VARCHAR(80) NULL,
     title VARCHAR(200),
@@ -165,3 +153,51 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_msg_related_contract (related_contract_id),
     INDEX idx_msg_related_house (related_house_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息中心';
+
+CREATE TABLE IF NOT EXISTS contract_files (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    contract_id BIGINT NOT NULL,
+    request_id BIGINT NULL,
+    file_type VARCHAR(40) NOT NULL COMMENT 'SIGNED_CONTRACT/TERMINATION_EVIDENCE/OTHER',
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(120) NULL,
+    file_size BIGINT NULL,
+    uploaded_by_account_id BIGINT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+    INDEX idx_cf_contract (contract_id),
+    INDEX idx_cf_request (request_id),
+    INDEX idx_cf_type (file_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='合同文件元数据';
+
+CREATE TABLE IF NOT EXISTS house_images (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    house_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(120) NULL,
+    file_size BIGINT NULL,
+    sort_order INT DEFAULT 0,
+    is_cover TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (house_id) REFERENCES houses(id) ON DELETE CASCADE,
+    INDEX idx_hi_house (house_id),
+    INDEX idx_hi_sort (house_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房源图片元数据';
+
+CREATE TABLE IF NOT EXISTS termination_evidences (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    request_id BIGINT NOT NULL,
+    contract_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(120) NULL,
+    file_size BIGINT NULL,
+    uploaded_by_account_id BIGINT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (request_id) REFERENCES termination_requests(id) ON DELETE CASCADE,
+    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+    INDEX idx_te_request (request_id),
+    INDEX idx_te_contract (contract_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='终止证据元数据';
